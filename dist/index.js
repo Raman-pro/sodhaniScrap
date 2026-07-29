@@ -7,9 +7,11 @@ const init_1 = require("./db/init");
 const bootstrap_1 = require("./services/bootstrap");
 const yahooHistory_1 = require("./services/yahooHistory");
 const bseLiveSync_1 = require("./services/bseLiveSync");
+const announcementSync_1 = require("./services/announcementSync");
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '300000', 10);
+const ANNOUNCEMENTS_POLL_INTERVAL_MS = parseInt(process.env.ANNOUNCEMENTS_POLL_INTERVAL_MS || '600000', 10);
 async function startLivePolling() {
     console.log(`Starting Phase 3 Live Polling Loop every ${POLL_INTERVAL_MS / 1000} seconds...`);
     // Run immediately first
@@ -18,6 +20,15 @@ async function startLivePolling() {
     setInterval(async () => {
         await (0, bseLiveSync_1.bseLiveSync)();
     }, POLL_INTERVAL_MS);
+}
+async function startAnnouncementsPolling() {
+    console.log(`Starting Announcements Polling Loop every ${ANNOUNCEMENTS_POLL_INTERVAL_MS / 1000} seconds...`);
+    // Run immediately first
+    await (0, announcementSync_1.announcementSync)();
+    // Then schedule
+    setInterval(async () => {
+        await (0, announcementSync_1.announcementSync)();
+    }, ANNOUNCEMENTS_POLL_INTERVAL_MS);
 }
 async function main() {
     try {
@@ -36,6 +47,8 @@ async function main() {
         }
         // Phase 3: The Live Updation Loop (BSE Polling)
         startLivePolling();
+        // Phase 4: Announcements Polling Loop
+        startAnnouncementsPolling();
     }
     catch (err) {
         console.error('Fatal error during initialization:', err);

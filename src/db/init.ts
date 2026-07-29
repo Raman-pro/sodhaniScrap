@@ -43,7 +43,7 @@ export async function initDB() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS "historical_prices"(
           "FinInstrmId" BIGINT NOT NULL,
-          "record_date" DATE NOT NULL,
+          "record_date" TIMESTAMP NOT NULL,
           "open_price" DECIMAL(14, 6) NULL,
           "high_price" DECIMAL(14, 6) NULL,
           "low_price" DECIMAL(14, 6) NULL,
@@ -62,6 +62,36 @@ export async function initDB() {
     // Create B-Tree index for optimization
     await client.query(`
       CREATE INDEX IF NOT EXISTS "historical_prices_idx" ON "historical_prices"("FinInstrmId", "record_date" DESC);
+    `);
+
+    // Create sync_metadata table for tracking state
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "sync_metadata"(
+          "key" VARCHAR(255) PRIMARY KEY,
+          "value" TEXT NOT NULL
+      );
+    `);
+
+    // Create bse_announcements table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "bse_announcements"(
+          "newsid" VARCHAR(255) PRIMARY KEY,
+          "scrip_cd" VARCHAR(255) NULL,
+          "news_dt" TIMESTAMP NULL,
+          "newssub" TEXT NULL,
+          "headline" TEXT NULL,
+          "slongname" TEXT NULL,
+          "announcement_type" VARCHAR(255) NULL,
+          "attachmentname" TEXT NULL,
+          "categoryname" VARCHAR(255) NULL
+      );
+    `);
+
+    // Create indexes for announcements
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "bse_announcements_scrip_cd_idx" ON "bse_announcements"("scrip_cd");
+      CREATE INDEX IF NOT EXISTS "bse_announcements_news_dt_idx" ON "bse_announcements"("news_dt");
+      CREATE INDEX IF NOT EXISTS "bse_announcements_categoryname_idx" ON "bse_announcements"("categoryname");
     `);
 
     console.log('Database schema initialized successfully.');

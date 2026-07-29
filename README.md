@@ -4,7 +4,7 @@ A highly robust, idempotent, long-running Node.js daemon that ingests stock mark
 
 ## Architecture and Workflow
 
-When the daemon starts, it runs through 3 phases:
+When the daemon starts via `npm start`, it runs through 3 phases:
 
 1. **Phase 1: Bootstrapping & Master Sync**
    Ensures the PostgreSQL database connection pool is running, generates the schema if missing, and syncs the master list of 2500+ equities using `companies.json` and BSE Bhavcopy mapping.
@@ -12,6 +12,9 @@ When the daemon starts, it runs through 3 phases:
    Iterates through the master list to query the maximum record date. Automatically downloads and upserts the exact missing days via `yahoo-finance2` using bulk, idempotent operations.
 3. **Phase 3: Live Polling Loop (BSE Sync)**
    Enters an infinite polling loop (default: every 5 minutes). Securely fetches gainers and losers directly from the BSE APIs (using exact spoofed headers), appending intra-day price action to the time-series.
+
+### Corporate Announcements Worker
+The corporate announcements fetcher is separated into its own independent worker so it can be scaled, paused, or run on a different cadence than the core price ingestion daemon.
 
 ## Prerequisites
 
@@ -44,6 +47,11 @@ When the daemon starts, it runs through 3 phases:
 
    # Yahoo Finance starting date fallback
    YAHOO_DEFAULT_START_DATE=1990-01-01
+
+   # Announcements Worker Configuration
+   BSE_ANNOUNCEMENTS_URL=https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w
+   ANNOUNCEMENTS_POLL_INTERVAL_MS=600000
+   ANNOUNCEMENTS_START_DATE=2026-07-01
    ```
 
 3. **Provide Source Files**
@@ -58,6 +66,15 @@ Instead, start the full ingestion application using the `npm start` script (whic
 ```bash
 npm start
 ```
+
+### Running the Corporate Announcements Worker
+
+To run the BSE announcements fetcher in parallel, open a second terminal window and run:
+
+```bash
+npm run start:announcements
+```
+*(This script accepts the `--skip_start` flag if you want to bypass database initialization).*
 
 ### Skipping Bootstrapping (Live Sync Only)
 
@@ -74,6 +91,9 @@ If you want to compile the project down to pure JavaScript before running (e.g. 
 ```bash
 npm run build
 node dist/index.js
+
+# To run the announcements worker in production:
+node dist/announcements.js
 ```
 
 ## Database Schema Highlights
@@ -81,3 +101,5 @@ node dist/index.js
 The pipeline enforces a tight schema:
 * `company_stock`: Static master list (`FinInstrmId`, `TckrSymb`, etc.)
 * `historical_prices`: Narrow time-series table. Uses a composite primary key on `("FinInstrmId", "record_date")` and a B-Tree Index on `("FinInstrmId", "record_date" DESC)` to allow sub-millisecond chart lookups.
+* `bse_announcements`: Contains fetched corporate announcements. Uses indexed columns for efficient filtering.
+* `sync_metadata`: Generic key-value store to maintain state (e.g., `last_newsid`) entirely within the database.

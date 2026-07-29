@@ -51,7 +51,7 @@ export async function bseLiveSync() {
   const values: any[] = [];
   
   for (const item of allData) {
-    const recordDate = item.dt_tm ? item.dt_tm.split('T')[0] : new Date().toISOString().split('T')[0];
+    const recordDate = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
     const key = `${item.scrip_cd}_${recordDate}`;
     
     if (!seen.has(key)) {
