@@ -25,10 +25,15 @@ export async function fetchHistoricalCatchup() {
 
     const upsertToDb = async (result: any[], FinInstrmId: string) => {
         if (!result || result.length === 0) return;
-        const values = result.map((row: any) => [
+        
+        // Filter out rows with null close/open (incomplete trading days or live intraday artifacts)
+        const cleanResult = result.filter((row: any) => row.close !== null && row.open !== null);
+        if (cleanResult.length === 0) return;
+        
+        const values = cleanResult.map((row: any) => [
           FinInstrmId,
           row.date.toISOString().split('T')[0],
-          row.open, row.high, row.low, row.close, row.adjClose, row.volume
+          row.open, row.high, row.low, row.close, row.adjclose || row.adjClose || null, row.volume
         ]);
 
         const query = format(`
@@ -61,7 +66,8 @@ export async function fetchHistoricalCatchup() {
       const period2 = new Date().toISOString().split('T')[0];
       
       const attemptFetch = async (symbol: string) => {
-        return (await yahooFinance.historical(symbol, { period1, period2 })) as any[];
+        const result = await yahooFinance.chart(symbol, { period1, period2 });
+        return result.quotes || [];
       };
 
       try {

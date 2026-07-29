@@ -17,7 +17,10 @@ async function fetchHistoricalCatchup() {
     const logFilePath = path_1.default.join(__dirname, '../../failed_fetches.log');
     try {
         const res = await client.query(`
-      SELECT c."FinInstrmId", c."TckrSymb", MAX(h."record_date") as last_record
+      SELECT c."FinInstrmId", c."TckrSymb", 
+        MAX(h."record_date") as last_record,
+        MIN(h."record_date") as first_record,
+        COUNT(h."record_date") as row_count
       FROM company_stock c
       LEFT JOIN historical_prices h ON c."FinInstrmId" = h."FinInstrmId"
       GROUP BY c."FinInstrmId", c."TckrSymb"
@@ -27,10 +30,14 @@ async function fetchHistoricalCatchup() {
         const upsertToDb = async (result, FinInstrmId) => {
             if (!result || result.length === 0)
                 return;
-            const values = result.map((row) => [
+            // Filter out rows with null close/open (incomplete trading days or live intraday artifacts)
+            const cleanResult = result.filter((row) => row.close !== null && row.open !== null);
+            if (cleanResult.length === 0)
+                return;
+            const values = cleanResult.map((row) => [
                 FinInstrmId,
                 row.date.toISOString().split('T')[0],
-                row.open, row.high, row.low, row.close, row.adjClose, row.volume
+                row.open, row.high, row.low, row.close, row.adjclose || row.adjClose || null, row.volume
             ]);
             const query = (0, pg_format_1.default)(`
           INSERT INTO historical_prices 
@@ -53,12 +60,18 @@ async function fetchHistoricalCatchup() {
                     ? TckrSymb
                     : `${TckrSymb}.BO`;
             }
-            const period1 = last_record
-                ? new Date(last_record).toISOString().split('T')[0]
-                : (process.env.YAHOO_DEFAULT_START_DATE || '1990-01-01');
+            const { row_count } = stock;
+            const MIN_ROWS_THRESHOLD = 10;
+            // If we have fewer than MIN_ROWS_THRESHOLD rows, do a full backfill
+            // This prevents BSE live sync rows from fooling the gap analysis
+            const needsFullBackfill = !last_record || parseInt(row_count) < MIN_ROWS_THRESHOLD;
+            const period1 = needsFullBackfill
+                ? (process.env.YAHOO_DEFAULT_START_DATE || '1990-01-01')
+                : new Date(last_record).toISOString().split('T')[0];
             const period2 = new Date().toISOString().split('T')[0];
             const attemptFetch = async (symbol) => {
-                return (await yahooFinance.historical(symbol, { period1, period2 }));
+                const result = await yahooFinance.chart(symbol, { period1, period2 });
+                return result.quotes || [];
             };
             try {
                 console.log(`Fetching history for ${primarySymbol} from ${period1} to ${period2}`);
