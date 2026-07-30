@@ -94,6 +94,41 @@ export async function initDB() {
       CREATE INDEX IF NOT EXISTS "bse_announcements_categoryname_idx" ON "bse_announcements"("categoryname");
     `);
 
+    // Create bse_spurt_volume table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "bse_spurt_volume"(
+          "scrip_cd" VARCHAR(255) NOT NULL,
+          "record_date" DATE NOT NULL DEFAULT CURRENT_DATE,
+          "scripname" VARCHAR(255) NULL,
+          "long_name" TEXT NULL,
+          "trd_vol" DECIMAL(14, 4) NULL,
+          "wkavgqty" DECIMAL(14, 4) NULL,
+          "volumechangetimes" DECIMAL(14, 4) NULL,
+          "ltradert" DECIMAL(14, 4) NULL,
+          "change_val" DECIMAL(14, 4) NULL,
+          "change_percent" DECIMAL(14, 4) NULL,
+          "turnover" DECIMAL(14, 4) NULL,
+          "nsurl" TEXT NULL,
+          PRIMARY KEY("scrip_cd", "record_date")
+      );
+    `);
+
+    // Create bse_top_gainers_losers table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "bse_top_gainers_losers"(
+          "record_time" TIMESTAMP NOT NULL,
+          "type" VARCHAR(10) NOT NULL,
+          "rank" INT NOT NULL,
+          "scrip_cd" VARCHAR(255) NOT NULL,
+          "scripname" VARCHAR(255) NULL,
+          "long_name" TEXT NULL,
+          "ltradert" DECIMAL(14, 4) NULL,
+          "change_val" DECIMAL(14, 4) NULL,
+          "change_percent" DECIMAL(14, 4) NULL,
+          PRIMARY KEY("record_time", "type", "rank")
+      );
+    `);
+
     console.log('Database schema initialized successfully.');
   } catch (error) {
     console.error('Error initializing database schema:', error);

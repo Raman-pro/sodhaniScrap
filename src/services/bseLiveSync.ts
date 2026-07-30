@@ -98,6 +98,62 @@ export async function bseLiveSync() {
 
     await client.query(query);
     console.log(`Successfully updated live prices for ${validValues.length} equities.`);
+
+    // Update top 10 gainers and losers
+    const topGainersLosersValues = [];
+    
+    // Process Gainers (Top 10)
+    for (let i = 0; i < Math.min(10, gainersList.length); i++) {
+        const item = gainersList[i];
+        const recordTime = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
+        topGainersLosersValues.push([
+            recordTime,
+            'gainer',
+            i + 1,
+            item.scrip_cd.toString(),
+            item.scripname,
+            item.LONG_NAME || null,
+            item.ltradert,
+            item.change_val,
+            item.change_percent
+        ]);
+    }
+    
+    // Process Losers (Top 10)
+    for (let i = 0; i < Math.min(10, losersList.length); i++) {
+        const item = losersList[i];
+        const recordTime = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
+        topGainersLosersValues.push([
+            recordTime,
+            'loser',
+            i + 1,
+            item.scrip_cd.toString(),
+            item.scripname,
+            item.LONG_NAME || null,
+            item.ltradert,
+            item.change_val,
+            item.change_percent
+        ]);
+    }
+
+    if (topGainersLosersValues.length > 0) {
+        const glQuery = format(`
+          INSERT INTO bse_top_gainers_losers 
+          ("record_time", "type", "rank", "scrip_cd", "scripname", "long_name", "ltradert", "change_val", "change_percent")
+          VALUES %L
+          ON CONFLICT ("record_time", "type", "rank") DO UPDATE SET
+            "scrip_cd" = EXCLUDED.scrip_cd,
+            "scripname" = EXCLUDED.scripname,
+            "long_name" = EXCLUDED.long_name,
+            "ltradert" = EXCLUDED.ltradert,
+            "change_val" = EXCLUDED.change_val,
+            "change_percent" = EXCLUDED.change_percent
+        `, topGainersLosersValues);
+        
+        await client.query(glQuery);
+        console.log(`Successfully updated Top 10 Gainers and Losers (${topGainersLosersValues.length} records).`);
+    }
+
   } catch (err) {
     console.error('Error during BSE live sync DB upsert:', err);
   } finally {

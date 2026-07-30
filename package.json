@@ -7,6 +7,7 @@
     "start": "tsx src/index.ts",
     "skip_start": "tsx src/index.ts --skip_start",
     "start:announcements": "tsx src/announcements.ts",
+    "start:spurt": "tsx src/spurtVolume.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
