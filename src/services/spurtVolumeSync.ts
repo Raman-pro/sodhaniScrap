@@ -27,7 +27,11 @@ export async function spurtVolumeSync() {
     const client = await pool.connect();
     
     try {
-        const response = await axios.get(BASE_URL, { headers: HEADERS, timeout: 15000 });
+        const response = await axios.get(BASE_URL, { 
+            headers: HEADERS, 
+            timeout: 15000,
+            insecureHTTPParser: true 
+        } as any);
         const records = response.data || [];
         
         console.log(`Fetched ${records.length} Spurt Volume records.`);

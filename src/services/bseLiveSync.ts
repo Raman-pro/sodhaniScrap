@@ -18,7 +18,10 @@ const BSE_HEADERS = {
 
 async function fetchBSEData(url: string) {
   try {
-    const response = await axios.get(url, { headers: BSE_HEADERS });
+    const response = await axios.get(url, { 
+        headers: BSE_HEADERS,
+        insecureHTTPParser: true 
+    } as any);
     return response.data;
   } catch (error: any) {
     console.error(`BSE Fetch Error for ${url}:`, error.message);
