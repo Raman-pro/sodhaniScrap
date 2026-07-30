@@ -7,11 +7,16 @@ dotenv.config();
 
 const BASE_URL = process.env.BSE_ANNOUNCEMENTS_URL || "https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w";
 const HEADERS = {
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Origin": "https://www.bseindia.com",
-    "Referer": "https://www.bseindia.com/",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    "accept": "application/json, text/plain, */*",
+    "accept-language": "en-US,en-IN;q=0.9,en;q=0.8",
+    "priority": "u=1, i",
+    "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"macOS\"",
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-site",
+    "Referer": "https://www.bseindia.com/"
 };
 
 async function getLastNewsId(): Promise<string | null> {
@@ -19,7 +24,15 @@ async function getLastNewsId(): Promise<string | null> {
     try {
         const res = await client.query(`SELECT value FROM sync_metadata WHERE key = 'last_newsid'`);
         if (res.rows.length > 0) {
-            return res.rows[0].value;
+            const newsid = res.rows[0].value;
+            // Verify that this newsid actually exists in the announcements table
+            // This prevents issues where the table is cleared but the metadata is not
+            const check = await client.query(`SELECT 1 FROM bse_announcements WHERE newsid = $1`, [newsid]);
+            if (check.rows.length === 0) {
+                console.warn(`[WARN] last_newsid ${newsid} found in metadata but missing from bse_announcements. Ignoring watermark.`);
+                return null;
+            }
+            return newsid;
         }
         return null;
     } finally {
@@ -53,7 +66,12 @@ async function fetchPage(fromDate: string, toDate: string, page: number): Promis
     };
 
     try {
-        const response = await axios.get(BASE_URL, { params, headers: HEADERS, timeout: 15000 });
+        const response = await axios.get(BASE_URL, { 
+            params, 
+            headers: HEADERS, 
+            timeout: 15000,
+            insecureHTTPParser: true 
+        } as any);
         return response.data.Table || [];
     } catch (error) {
         console.error(`Error fetching announcements page ${page}:`, error);
