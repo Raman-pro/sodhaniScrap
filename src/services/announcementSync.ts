@@ -5,7 +5,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const BASE_URL = process.env.BSE_ANNOUNCEMENTS_URL || "https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w";
+const BASE_URL = process.env.BSE_ANNOUNCEMENTS_URL ||
+"https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w";
 const HEADERS = {
     "accept": "application/json, text/plain, */*",
     "accept-language": "en-US,en-IN;q=0.9,en;q=0.8",
@@ -25,11 +26,10 @@ async function getLastNewsId(): Promise<string | null> {
         const res = await client.query(`SELECT value FROM sync_metadata WHERE key = 'last_newsid'`);
         if (res.rows.length > 0) {
             const newsid = res.rows[0].value;
-            // Verify that this newsid actually exists in the announcements table
-            // This prevents issues where the table is cleared but the metadata is not
             const check = await client.query(`SELECT 1 FROM bse_announcements WHERE newsid = $1`, [newsid]);
             if (check.rows.length === 0) {
-                console.warn(`[WARN] last_newsid ${newsid} found in metadata but missing from bse_announcements. Ignoring watermark.`);
+                console.warn(`[WARN] last_newsid ${newsid} found in metadata but missing from bse_announcements.
+Ignoring watermark.`);
                 return null;
             }
             return newsid;
@@ -44,8 +44,8 @@ async function setLastNewsId(newsid: string): Promise<void> {
     const client = await pool.connect();
     try {
         await client.query(`
-            INSERT INTO sync_metadata (key, value) 
-            VALUES ('last_newsid', $1) 
+            INSERT INTO sync_metadata (key, value)
+            VALUES ('last_newsid', $1)
             ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
         `, [newsid]);
     } finally {
@@ -66,11 +66,11 @@ async function fetchPage(fromDate: string, toDate: string, page: number): Promis
     };
 
     try {
-        const response = await axios.get(BASE_URL, { 
-            params, 
-            headers: HEADERS, 
+        const response = await axios.get(BASE_URL, {
+            params,
+            headers: HEADERS,
             timeout: 15000,
-            insecureHTTPParser: true 
+            insecureHTTPParser: true
         } as any);
         return response.data.Table || [];
     } catch (error) {
@@ -79,81 +79,93 @@ async function fetchPage(fromDate: string, toDate: string, page: number): Promis
     }
 }
 
+function ymd(d: Date): string {
+    return d.toISOString().split('T')[0].replace(/-/g, '');
+}
+
+function parseYmd(s: string): Date {
+    return new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, Number(s.slice(6, 8)));
+}
+
 export async function announcementSync() {
     console.log('--- Starting BSE Announcements Sync ---');
     const client = await pool.connect();
-    
+
     try {
         const lastNewsId = await getLastNewsId();
         let newerNewsId: string | null = null;
         let insertedCount = 0;
-        
-        const today = new Date();
-        const yyyymmddToday = today.toISOString().split('T')[0].replace(/-/g, '');
-        
-        let fromDate = yyyymmddToday;
+
+        const todayStr = ymd(new Date());
+        let startDateStr = todayStr;
         if (process.env.ANNOUNCEMENTS_START_DATE) {
-             fromDate = process.env.ANNOUNCEMENTS_START_DATE.replace(/-/g, '');
+            startDateStr = process.env.ANNOUNCEMENTS_START_DATE.replace(/-/g, '');
         }
 
-        const maxPages = 50; // Safeguard
+        // BSE's endpoint only reliably returns results for a single day at a time,
+        // so walk backwards day-by-day from today to the configured start date.
+        const dates: string[] = [];
+        const startD = parseYmd(startDateStr);
+        for (let d = parseYmd(todayStr); d >= startD; d.setDate(d.getDate() - 1)) {
+            dates.push(ymd(d));
+        }
 
-        for (let page = 1; page <= maxPages; page++) {
-            const records = await fetchPage(fromDate, yyyymmddToday, page);
-            console.log(`Announcements Page ${page}: ${records.length} records fetched.`);
+        const maxPages = 50; // safeguard per day
 
-            if (records.length === 0) break;
+        dayLoop:
+        for (const dateStr of dates) {
+            for (let page = 1; page <= maxPages; page++) {
+                const records = await fetchPage(dateStr, dateStr, page);
+                console.log(`Announcements ${dateStr} Page ${page}: ${records.length} records fetched.`);
 
-            if (newerNewsId === null) {
-                newerNewsId = records[0].NEWSID;
-            }
+                if (records.length === 0) break;
 
-            let seenLast = false;
-            const valuesToInsert = [];
-
-            for (const rec of records) {
-                if (rec.NEWSID === lastNewsId) {
-                    seenLast = true;
-                    break;
+                if (newerNewsId === null) {
+                    newerNewsId = records[0].NEWSID;
                 }
 
-                // Handle date conversion if needed, assuming API returns string like '2024-05-10T10:00:00'
-                // Sometimes it's a string, sometimes we can pass it directly to PG
-                let newsDate = rec.NEWS_DT;
-                // Simple validation/cleanup if required, PG can handle ISO strings well
-                
-                valuesToInsert.push([
-                    rec.NEWSID,
-                    rec.SCRIP_CD ? String(rec.SCRIP_CD) : null,
-                    newsDate,
-                    rec.NEWSSUB,
-                    rec.HEADLINE,
-                    rec.SLONGNAME,
-                    rec.ANNOUNCEMENT_TYPE,
-                    rec.ATTACHMENTNAME,
-                    rec.CATEGORYNAME
-                ]);
-            }
+                let seenLast = false;
+                const valuesToInsert = [];
 
-            if (valuesToInsert.length > 0) {
-                const query = format(`
-                    INSERT INTO bse_announcements 
-                    (newsid, scrip_cd, news_dt, newssub, headline, slongname, announcement_type, attachmentname, categoryname)
-                    VALUES %L
-                    ON CONFLICT (newsid) DO NOTHING
-                `, valuesToInsert);
-                
-                const res = await client.query(query);
-                insertedCount += res.rowCount || 0;
-            }
+                for (const rec of records) {
+                    if (rec.NEWSID === lastNewsId) {
+                        seenLast = true;
+                        break;
+                    }
 
-            if (seenLast) {
-                console.log(`Hit last_newsid (${lastNewsId}) — caught up.`);
-                break;
+                    valuesToInsert.push([
+                        rec.NEWSID,
+                        rec.SCRIP_CD ? String(rec.SCRIP_CD) : null,
+                        rec.NEWS_DT,
+                        rec.NEWSSUB,
+                        rec.HEADLINE,
+                        rec.SLONGNAME,
+                        rec.ANNOUNCEMENT_TYPE,
+                        rec.ATTACHMENTNAME,
+                        rec.CATEGORYNAME
+                    ]);
+                }
+
+                if (valuesToInsert.length > 0) {
+                    const query = format(`
+                        INSERT INTO bse_announcements
+                        (newsid, scrip_cd, news_dt, newssub, headline, slongname, announcement_type, attachmentname,
+categoryname)
+                        VALUES %L
+                        ON CONFLICT (newsid) DO NOTHING
+                    `, valuesToInsert);
+
+                    const res = await client.query(query);
+                    insertedCount += res.rowCount || 0;
+                }
+
+                if (seenLast) {
+                    console.log(`Hit last_newsid (${lastNewsId}) on ${dateStr} — caught up.`);
+                    break dayLoop;
+                }
+
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
-            
-            // Sleep slightly to prevent rate limits
-            await new Promise(resolve => setTimeout(resolve, 500));
         }
 
         if (newerNewsId && newerNewsId !== lastNewsId) {
