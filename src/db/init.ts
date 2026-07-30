@@ -59,6 +59,15 @@ export async function initDB() {
       );
     `);
 
+    // Ensure newer columns exist if the table was created in an older schema version
+    await client.query(`
+      ALTER TABLE "historical_prices" 
+      ADD COLUMN IF NOT EXISTS "volume" BIGINT NULL,
+      ADD COLUMN IF NOT EXISTS "adj_close" DOUBLE PRECISION NULL,
+      ADD COLUMN IF NOT EXISTS "dividends" DECIMAL(10, 4) NULL,
+      ADD COLUMN IF NOT EXISTS "stock_splits" DECIMAL(10, 4) NULL;
+    `);
+
     // Create B-Tree index for optimization
     await client.query(`
       CREATE INDEX IF NOT EXISTS "historical_prices_idx" ON "historical_prices"("FinInstrmId", "record_date" DESC);
