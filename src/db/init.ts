@@ -134,9 +134,45 @@ export async function initDB() {
           "ltradert" DECIMAL(14, 4) NULL,
           "change_val" DECIMAL(14, 4) NULL,
           "change_percent" DECIMAL(14, 4) NULL,
-          PRIMARY KEY("record_time", "type", "rank")
+          PRIMARY KEY("type", "rank")
       );
     `);
+
+    // Schema migration: if table existed with old PK ("record_time", "type", "rank"), fix it.
+    try {
+        // Check if the old primary key exists
+        const res = await client.query(`
+            SELECT constraint_name 
+            FROM information_schema.table_constraints 
+            WHERE table_name = 'bse_top_gainers_losers' AND constraint_type = 'PRIMARY KEY'
+        `);
+        if (res.rows.length > 0) {
+            const pkName = res.rows[0].constraint_name;
+            const columnsRes = await client.query(`
+                SELECT column_name 
+                FROM information_schema.key_column_usage 
+                WHERE constraint_name = $1
+            `, [pkName]);
+            
+            const columns = columnsRes.rows.map(r => r.column_name);
+            if (columns.includes('record_time')) {
+                console.log('Migrating bse_top_gainers_losers to new primary key...');
+                // Delete duplicates, keeping the most recent one for each type and rank
+                await client.query(`
+                    DELETE FROM "bse_top_gainers_losers" a USING "bse_top_gainers_losers" b 
+                    WHERE a.type = b.type AND a.rank = b.rank AND a.record_time < b.record_time;
+                `);
+                
+                // Drop the old primary key
+                await client.query(`ALTER TABLE "bse_top_gainers_losers" DROP CONSTRAINT "${pkName}";`);
+                // Add the new primary key
+                await client.query(`ALTER TABLE "bse_top_gainers_losers" ADD PRIMARY KEY ("type", "rank");`);
+                console.log('Migration complete.');
+            }
+        }
+    } catch (e) {
+        console.error('Migration check failed, skipping:', e);
+    }
 
     console.log('Database schema initialized successfully.');
   } catch (error) {

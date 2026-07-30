@@ -141,7 +141,8 @@ export async function bseLiveSync() {
           INSERT INTO bse_top_gainers_losers 
           ("record_time", "type", "rank", "scrip_cd", "scripname", "long_name", "ltradert", "change_val", "change_percent")
           VALUES %L
-          ON CONFLICT ("record_time", "type", "rank") DO UPDATE SET
+          ON CONFLICT ("type", "rank") DO UPDATE SET
+            "record_time" = EXCLUDED.record_time,
             "scrip_cd" = EXCLUDED.scrip_cd,
             "scripname" = EXCLUDED.scripname,
             "long_name" = EXCLUDED.long_name,
