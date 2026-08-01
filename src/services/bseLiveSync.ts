@@ -29,7 +29,7 @@ async function fetchBSELoserData(url: string) {
       '-H', 'accept: application/json',
       '-H', 'Referer: https://www.bseindia.com/',
       url
-    ]);
+    ], { maxBuffer: 10 * 1024 * 1024 }); // 10MB buffer to handle large JSON response
     return JSON.parse(stdout);
   } catch (error: any) {
     console.error(`BSE Loser Fetch Error (curl):`, error.message);
