@@ -1,33 +1,20 @@
-import axios from 'axios';
-import { pool } from '../db/pool';
-// @ts-ignore
-import format from 'pg-format';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+const execFileAsync = promisify(execFile);
 
-const BSE_HEADERS = {
-    "accept": "application/json, text/plain, */*",
-    "accept-language": "en-US,en-IN;q=0.9,en;q=0.8",
-    "priority": "u=1, i",
-    "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": "\"macOS\"",
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-site",
-    "Referer": "https://www.bseindia.com/"
-};
-
-// Use Node's native fetch for losers (axios gets blocked by BSE anti-bot)
+// Use curl directly for losers - axios and native fetch both get blocked by 
+// BSE anti-bot on Azure VMs, but curl works reliably
 async function fetchBSELoserData(url: string) {
   try {
-    const response = await fetch(url, {
-      headers: {
-        "accept": "application/json",
-        "Referer": "https://www.bseindia.com/"
-      }
-    });
-    return await response.json();
+    const { stdout } = await execFileAsync('curl', [
+      '-s',
+      '-H', 'accept: application/json',
+      '-H', 'Referer: https://www.bseindia.com/',
+      url
+    ]);
+    return JSON.parse(stdout);
   } catch (error: any) {
-    console.error(`BSE Loser Fetch Error:`, error.message);
+    console.error(`BSE Loser Fetch Error (curl):`, error.message);
     return [];
   }
 }
@@ -52,7 +39,7 @@ export async function bseLiveSync() {
   const loserUrl = process.env.BSE_LOSER_URL || 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=loser&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
 
   // Fetch gainers with axios (works fine)
-  // Fetch losers with Node native fetch (axios gets blocked by BSE anti-bot for losers)
+  // Fetch losers with curl (axios/fetch both get blocked by BSE anti-bot for losers)
   const gainers = await fetchBSEData(gainerUrl);
   await new Promise(resolve => setTimeout(resolve, 2000));
   const losers = await fetchBSELoserData(loserUrl);
