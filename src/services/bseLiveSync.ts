@@ -53,8 +53,11 @@ async function fetchBSEData(url: string) {
 export async function bseLiveSync() {
   console.log(`[${new Date().toISOString()}] Phase 3: Executing BSE Live Sync...`);
   
-  const gainerUrl = process.env.BSE_GAINER_URL || 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=gainer&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
-  const loserUrl = process.env.BSE_LOSER_URL || 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=loser&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
+  const gainerUrl = 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=gainer&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
+  const loserUrl = 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=loser&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
+
+  console.log('Fetching gainers from:', gainerUrl);
+  console.log('Fetching losers from:', loserUrl);
 
   // Fetch gainers with axios (works fine)
   // Fetch losers with curl (axios/fetch both get blocked by BSE anti-bot for losers)
