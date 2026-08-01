@@ -16,17 +16,26 @@ const BSE_HEADERS = {
     "Referer": "https://www.bseindia.com/"
 };
 
-// Minimal headers that match curl behavior - BSE anti-bot blocks 
-// the browser-like headers above for the loser API specifically
-const BSE_HEADERS_SIMPLE = {
-    "accept": "application/json",
-    "Referer": "https://www.bseindia.com/"
-};
+// Use Node's native fetch for losers (axios gets blocked by BSE anti-bot)
+async function fetchBSELoserData(url: string) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "accept": "application/json",
+        "Referer": "https://www.bseindia.com/"
+      }
+    });
+    return await response.json();
+  } catch (error: any) {
+    console.error(`BSE Loser Fetch Error:`, error.message);
+    return [];
+  }
+}
 
-async function fetchBSEData(url: string, useSimpleHeaders = false) {
+async function fetchBSEData(url: string) {
   try {
     const response = await axios.get(url, { 
-        headers: useSimpleHeaders ? BSE_HEADERS_SIMPLE : BSE_HEADERS,
+        headers: BSE_HEADERS,
         insecureHTTPParser: true 
     } as any);
     return response.data;
@@ -42,14 +51,14 @@ export async function bseLiveSync() {
   const gainerUrl = process.env.BSE_GAINER_URL || 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=gainer&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
   const loserUrl = process.env.BSE_LOSER_URL || 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=loser&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
 
-  // Fetch gainers with browser headers (works fine)
-  // Fetch losers with simple headers (BSE anti-bot blocks browser headers for losers)
+  // Fetch gainers with axios (works fine)
+  // Fetch losers with Node native fetch (axios gets blocked by BSE anti-bot for losers)
   const gainers = await fetchBSEData(gainerUrl);
   await new Promise(resolve => setTimeout(resolve, 2000));
-  const losers = await fetchBSEData(loserUrl, true);
+  const losers = await fetchBSELoserData(loserUrl);
 
   const gainersList = gainers?.Table || [];
-  const losersList = losers?.Table || [];
+  const losersList = (losers as any)?.Table || [];
   console.log(`Fetched ${gainersList.length} gainers, ${losersList.length} losers from BSE.`);
   if (gainersList.length > 0) {
     console.log(`Top gainer: ${gainersList[0].scripname} change_percent=${gainersList[0].change_percent}`);
