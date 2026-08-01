@@ -35,19 +35,25 @@ export async function bseLiveSync() {
   const gainerUrl = process.env.BSE_GAINER_URL || 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=gainer&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
   const loserUrl = process.env.BSE_LOSER_URL || 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=loser&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
 
-  // Fetch sequentially with delay to avoid BSE rate-limiting
+  // BSE gainer API returns ALL stocks. The loser API returns unreliable 
+  // data via Node.js (BSE anti-bot), so we use a single API call and 
+  // sort ourselves to derive both gainers and losers.
   const gainers = await fetchBSEData(gainerUrl);
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  const losers = await fetchBSEData(loserUrl);
 
-  const gainersList = gainers?.Table || [];
-  const losersList = losers?.Table || [];
-  console.log(`Fetched ${gainersList.length} gainers, ${losersList.length} losers from BSE.`);
+  const fullList = gainers?.Table || [];
+  // Sort by change_percent DESC to get true gainers at top, losers at bottom
+  const sorted = [...fullList].sort((a: any, b: any) => (b.change_percent ?? 0) - (a.change_percent ?? 0));
+  const gainersList = sorted.slice(0, 50);
+  const losersList = sorted.slice(-50).reverse(); // reverse so rank 1 = biggest loser
+  console.log(`Fetched ${fullList.length} stocks from BSE.`);
+  if (gainersList.length > 0) {
+    console.log(`Top gainer: ${gainersList[0].scripname} change_percent=${gainersList[0].change_percent}`);
+  }
   if (losersList.length > 0) {
     console.log(`Top loser: ${losersList[0].scripname} change_percent=${losersList[0].change_percent}`);
   }
   
-  const allData = [...gainersList, ...losersList];
+  const allData = fullList;
   
   if (allData.length === 0) {
     console.log('No data fetched from BSE.');
