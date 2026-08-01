@@ -35,13 +35,17 @@ export async function bseLiveSync() {
   const gainerUrl = process.env.BSE_GAINER_URL || 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=gainer&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
   const loserUrl = process.env.BSE_LOSER_URL || 'https://api.bseindia.com/BseIndiaAPI/api/MktRGainerLoserDataeqto/w?GLtype=loser&IndxGrp=AllMkt&IndxGrpval=AllMkt&orderby=all';
 
-  const [gainers, losers] = await Promise.all([
-    fetchBSEData(gainerUrl),
-    fetchBSEData(loserUrl)
-  ]);
+  // Fetch sequentially with delay to avoid BSE rate-limiting
+  const gainers = await fetchBSEData(gainerUrl);
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  const losers = await fetchBSEData(loserUrl);
 
   const gainersList = gainers?.Table || [];
   const losersList = losers?.Table || [];
+  console.log(`Fetched ${gainersList.length} gainers, ${losersList.length} losers from BSE.`);
+  if (losersList.length > 0) {
+    console.log(`Top loser: ${losersList[0].scripname} change_percent=${losersList[0].change_percent}`);
+  }
   
   const allData = [...gainersList, ...losersList];
   
