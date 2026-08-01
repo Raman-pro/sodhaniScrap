@@ -25,6 +25,13 @@ export async function parseCompaniesJson(): Promise<CompanyStock[]> {
     }
   }
 
+  if (parsed.bse_to_nse) {
+    for (const bseCode of Object.keys(parsed.bse_to_nse)) {
+      const nseCode = parsed.bse_to_nse[bseCode];
+      companies.push({ FinInstrmId: bseCode, TckrSymb: `${nseCode}.NS` });
+    }
+  }
+
   // Commented out per user request: only process bse_only stocks
   // if (parsed.both && parsed.nse_to_bse) {
   //   for (const nse of parsed.both) {
@@ -40,10 +47,10 @@ export async function parseCompaniesJson(): Promise<CompanyStock[]> {
 
 export async function parseBhavcopy(): Promise<Map<string, any>> {
   const defaultCsvPath = path.join(__dirname, '../../BhavCopy_BSE_CM_0_0_0_20260722_F_0000.CSV');
-  const csvPath = process.env.BHAVCOPY_CSV_PATH 
+  const csvPath = process.env.BHAVCOPY_CSV_PATH
     ? path.join(__dirname, process.env.BHAVCOPY_CSV_PATH)
     : defaultCsvPath;
-    
+
   const mapping = new Map<string, any>();
 
   if (!fs.existsSync(csvPath)) {
