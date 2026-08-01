@@ -105,8 +105,8 @@ export async function bseLiveSync() {
     // Update top 10 gainers and losers
     const topGainersLosersValues = [];
     
-    // Process Gainers (Top 10)
-    for (let i = 0; i < Math.min(10, gainersList.length); i++) {
+    // Process Gainers (Top 50)
+    for (let i = 0; i < Math.min(50, gainersList.length); i++) {
         const item = gainersList[i];
         const recordTime = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
         topGainersLosersValues.push([
@@ -122,8 +122,8 @@ export async function bseLiveSync() {
         ]);
     }
     
-    // Process Losers (Top 10)
-    for (let i = 0; i < Math.min(10, losersList.length); i++) {
+    // Process Losers (Top 50)
+    for (let i = 0; i < Math.min(50, losersList.length); i++) {
         const item = losersList[i];
         const recordTime = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
         topGainersLosersValues.push([
