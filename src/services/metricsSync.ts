@@ -11,6 +11,25 @@ function parseCleanNumber(val: any): number {
   return match ? parseFloat(match[0]) : 0;
 }
 
+// Helper for case-insensitive file matching (Linux is case-sensitive)
+async function findJsonCaseInsensitive(dir: string, basename: string): Promise<string | null> {
+  try {
+    if (!fs.existsSync(dir)) return null;
+    const files = await fs.promises.readdir(dir);
+    const lowerBasename = basename.toLowerCase();
+    const targetFile = files.find(f => {
+      const nameWithoutExt = f.replace(/\.[^/.]+$/, "");
+      return nameWithoutExt.toLowerCase() === lowerBasename;
+    });
+    if (targetFile) {
+      return path.join(dir, targetFile);
+    }
+  } catch (err) {
+    // ignore
+  }
+  return null;
+}
+
 export async function metricsSync() {
   console.log('Starting daily metrics sync for all stocks...');
   const client = await pool.connect();
@@ -19,10 +38,12 @@ export async function metricsSync() {
     // Try to load BSE to NSE mappings
     let bseToNse: Record<string, string> = {};
     try {
-      // Assuming sodhaniScrap is next to sodhani-api in /opt/ or locally
       const mappingsPath = path.resolve(process.cwd(), '../sodhani-api/exchange_code_mappings.json');
       if (fs.existsSync(mappingsPath)) {
         bseToNse = JSON.parse(fs.readFileSync(mappingsPath, 'utf8'))?.bse_to_nse || {};
+        console.log(`Loaded ${Object.keys(bseToNse).length} BSE->NSE mappings.`);
+      } else {
+        console.warn('Mapping file not found at:', mappingsPath);
       }
     } catch(e: any) {
       console.error('Could not load mappings:', e.message);
@@ -47,25 +68,19 @@ export async function metricsSync() {
     let processed = 0;
     
     for (const row of historyResult.rows) {
-      const symbol = row.TckrSymb.toUpperCase();
+      const symbol = row.TckrSymb.trim().toUpperCase();
       const nseSymbol = bseToNse[symbol] || symbol;
       const cmp = parseFloat(row.close_price);
       
       if (isNaN(cmp)) continue;
 
-      // Try NSE symbol first, then BSE symbol
-      let jsonPath = path.join(outputConsolidated, `${nseSymbol}.json`);
-      if (!fs.existsSync(jsonPath)) {
-        jsonPath = path.join(outputDir, `${nseSymbol}.json`);
-      }
-      if (!fs.existsSync(jsonPath)) {
-        jsonPath = path.join(outputConsolidated, `${symbol}.json`);
-      }
-      if (!fs.existsSync(jsonPath)) {
-        jsonPath = path.join(outputDir, `${symbol}.json`);
-      }
+      // Try NSE symbol first, then BSE symbol (Case Insensitive for Linux)
+      let jsonPath = await findJsonCaseInsensitive(outputConsolidated, nseSymbol) ||
+                     await findJsonCaseInsensitive(outputDir, nseSymbol) ||
+                     await findJsonCaseInsensitive(outputConsolidated, symbol) ||
+                     await findJsonCaseInsensitive(outputDir, symbol);
       
-      if (!fs.existsSync(jsonPath)) continue; // No json for this stock
+      if (!jsonPath) continue; // No json for this stock
 
       try {
         const rawData = fs.readFileSync(jsonPath, 'utf8');
