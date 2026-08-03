@@ -69,7 +69,7 @@ export async function metricsSync() {
     let processed = 0;
     
     for (const row of historyResult.rows) {
-      const symbol = row.TckrSymb.trim().toUpperCase();
+      const symbol = row.TckrSymb.trim().replace(/\.(NS|BO)$/i, '').toUpperCase();
       const nseSymbol = bseToNse[symbol] || symbol;
       const finId = row.FinInstrmId ? row.FinInstrmId.toString() : '';
       const cmp = parseFloat(row.close_price);
