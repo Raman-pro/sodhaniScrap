@@ -53,6 +53,7 @@ export async function metricsSync() {
     const historyResult = await client.query(`
       SELECT DISTINCT ON (hp."FinInstrmId") 
         cs."TckrSymb",
+        cs."FinInstrmId",
         hp.close_price
       FROM historical_prices hp
       JOIN company_stock cs ON cs."FinInstrmId" = hp."FinInstrmId"
@@ -70,15 +71,21 @@ export async function metricsSync() {
     for (const row of historyResult.rows) {
       const symbol = row.TckrSymb.trim().toUpperCase();
       const nseSymbol = bseToNse[symbol] || symbol;
+      const finId = row.FinInstrmId ? row.FinInstrmId.toString() : '';
       const cmp = parseFloat(row.close_price);
       
       if (isNaN(cmp)) continue;
 
-      // Try NSE symbol first, then BSE symbol (Case Insensitive for Linux)
+      // Try NSE symbol first, then BSE TckrSymb, then the numerical BSE Scrip Code (FinInstrmId)
       let jsonPath = await findJsonCaseInsensitive(outputConsolidated, nseSymbol) ||
                      await findJsonCaseInsensitive(outputDir, nseSymbol) ||
                      await findJsonCaseInsensitive(outputConsolidated, symbol) ||
                      await findJsonCaseInsensitive(outputDir, symbol);
+                     
+      if (!jsonPath && finId) {
+        jsonPath = await findJsonCaseInsensitive(outputConsolidated, finId) ||
+                   await findJsonCaseInsensitive(outputDir, finId);
+      }
       
       if (!jsonPath) continue; // No json for this stock
 
