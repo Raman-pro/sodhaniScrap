@@ -76,6 +76,8 @@ export async function metricsSync() {
       
       if (isNaN(cmp)) continue;
 
+      const metricsSymbol = finId || symbol;
+
       // Try NSE symbol first, then BSE TckrSymb, then the numerical BSE Scrip Code (FinInstrmId)
       let jsonPath = await findJsonCaseInsensitive(outputConsolidated, nseSymbol) ||
                      await findJsonCaseInsensitive(outputDir, nseSymbol) ||
@@ -186,7 +188,7 @@ export async function metricsSync() {
             "roce" = EXCLUDED."roce",
             "updated_at" = CURRENT_TIMESTAMP
         `, [
-          symbol, cmp, pe, liveMktCap, divYld, 
+          metricsSymbol, cmp, pe, liveMktCap, divYld, 
           npQtr, profitVar, salesQtr, salesVar, roce
         ]);
         
