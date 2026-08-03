@@ -173,6 +173,22 @@ export async function initDB() {
     } catch (e) {
         console.error('Migration check failed, skipping:', e);
     }
+    // Create stock_metrics table for peer comparison
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "stock_metrics"(
+          "symbol" VARCHAR(20) PRIMARY KEY,
+          "cmp" DECIMAL(14, 4) NULL,
+          "pe" DECIMAL(14, 4) NULL,
+          "mkt_cap" DECIMAL(24, 4) NULL,
+          "div_yld" DECIMAL(14, 4) NULL,
+          "np_qtr" DECIMAL(24, 4) NULL,
+          "profit_var" DECIMAL(14, 4) NULL,
+          "sales_qtr" DECIMAL(24, 4) NULL,
+          "sales_var" DECIMAL(14, 4) NULL,
+          "roce" DECIMAL(14, 4) NULL,
+          "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
     console.log('Database schema initialized successfully.');
   } catch (error) {
