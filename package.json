@@ -9,6 +9,7 @@
     "start:announcements": "tsx src/announcements.ts",
     "start:spurt": "tsx src/spurtVolume.ts",
     "start:metrics": "tsx src/metricsWorker.ts",
+    "clear-metrics": "tsx src/clear_metrics.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
