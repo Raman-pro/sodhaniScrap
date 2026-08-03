@@ -16,6 +16,18 @@ export async function metricsSync() {
   const client = await pool.connect();
   
   try {
+    // Try to load BSE to NSE mappings
+    let bseToNse: Record<string, string> = {};
+    try {
+      // Assuming sodhaniScrap is next to sodhani-api in /opt/ or locally
+      const mappingsPath = path.resolve(process.cwd(), '../sodhani-api/exchange_code_mappings.json');
+      if (fs.existsSync(mappingsPath)) {
+        bseToNse = JSON.parse(fs.readFileSync(mappingsPath, 'utf8'))?.bse_to_nse || {};
+      }
+    } catch(e: any) {
+      console.error('Could not load mappings:', e.message);
+    }
+
     // Get all stocks that have historical prices
     const historyResult = await client.query(`
       SELECT DISTINCT ON (hp."FinInstrmId") 
@@ -36,11 +48,19 @@ export async function metricsSync() {
     
     for (const row of historyResult.rows) {
       const symbol = row.TckrSymb.toUpperCase();
+      const nseSymbol = bseToNse[symbol] || symbol;
       const cmp = parseFloat(row.close_price);
       
       if (isNaN(cmp)) continue;
 
-      let jsonPath = path.join(outputConsolidated, `${symbol}.json`);
+      // Try NSE symbol first, then BSE symbol
+      let jsonPath = path.join(outputConsolidated, `${nseSymbol}.json`);
+      if (!fs.existsSync(jsonPath)) {
+        jsonPath = path.join(outputDir, `${nseSymbol}.json`);
+      }
+      if (!fs.existsSync(jsonPath)) {
+        jsonPath = path.join(outputConsolidated, `${symbol}.json`);
+      }
       if (!fs.existsSync(jsonPath)) {
         jsonPath = path.join(outputDir, `${symbol}.json`);
       }
