@@ -190,6 +190,15 @@ export async function initDB() {
       );
     `);
 
+    // Create technical_analysis table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "technical_analysis"(
+          "fin_instrm_id" VARCHAR(50) PRIMARY KEY,
+          "ta_data" JSONB NOT NULL,
+          "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     console.log('Database schema initialized successfully.');
   } catch (error) {
     console.error('Error initializing database schema:', error);
