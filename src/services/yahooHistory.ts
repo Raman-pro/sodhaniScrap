@@ -11,6 +11,17 @@ export async function fetchHistoricalCatchup() {
   
   const client = await pool.connect();
   const logFilePath = path.join(__dirname, '../../failed_fetches.log');
+
+  const companiesDataPath = path.join(__dirname, '../../companies.json');
+  let bseToNseMap: Record<string, string> = {};
+  try {
+    if (fs.existsSync(companiesDataPath)) {
+      const companiesData = JSON.parse(fs.readFileSync(companiesDataPath, 'utf8'));
+      bseToNseMap = companiesData.bse_to_nse || {};
+    }
+  } catch (err) {
+    console.error('Failed to load companies.json:', err);
+  }
   
   try {
     const res = await client.query(`
@@ -59,6 +70,8 @@ export async function fetchHistoricalCatchup() {
             ? TckrSymb 
             : `${TckrSymb}.BO`;
       }
+      
+      const nseSymbol = bseToNseMap[FinInstrmId] ? `${bseToNseMap[FinInstrmId]}.NS` : null;
 
       const period1 = last_record 
         ? new Date(last_record).toISOString().split('T')[0] 
@@ -70,26 +83,57 @@ export async function fetchHistoricalCatchup() {
         return result.quotes || [];
       };
 
+      let primarySuccess = false;
+      let fetchedRowsCount = 0;
+      
       try {
         console.log(`Fetching history for ${primarySymbol} from ${period1} to ${period2}`);
         const result = await attemptFetch(primarySymbol);
+        fetchedRowsCount = result?.length || 0;
         await upsertToDb(result, FinInstrmId);
-        console.log(`Upserted ${result?.length || 0} rows for ${primarySymbol}`);
+        console.log(`Upserted ${fetchedRowsCount} rows for ${primarySymbol}`);
+        primarySuccess = true;
       } catch (err: any) {
-        if (fallbackSymbol) {
+        console.error(`Error fetching for ${primarySymbol}: ${err.message}`);
+      }
+
+      if (!primarySuccess || fetchedRowsCount < 20) {
+        if (fallbackSymbol && fallbackSymbol !== primarySymbol) {
            try {
-             console.log(`Failed for ${primarySymbol}, trying fallback ${fallbackSymbol} from ${period1} to ${period2}`);
-             const result = await attemptFetch(fallbackSymbol);
-             await upsertToDb(result, FinInstrmId);
-             console.log(`Upserted ${result?.length || 0} rows for ${fallbackSymbol}`);
+             console.log(`Trying fallback ${fallbackSymbol} from ${period1} to ${period2} (Reason: ${!primarySuccess ? 'Error on primary' : 'Fetched < 20 rows on primary'})`);
+             const fallbackResult = await attemptFetch(fallbackSymbol);
+             fetchedRowsCount = fallbackResult?.length || 0;
+             await upsertToDb(fallbackResult, FinInstrmId);
+             console.log(`Upserted ${fetchedRowsCount} rows for ${fallbackSymbol}`);
+             if (fetchedRowsCount >= 20) {
+               primarySuccess = true;
+             }
            } catch (fallbackErr: any) {
-             console.error(`Fallback failed for ${fallbackSymbol}. Logging to failed_fetches.log`);
-             fs.appendFileSync(logFilePath, `${new Date().toISOString()} - ${FinInstrmId}, Primary: ${primarySymbol}, Fallback: ${fallbackSymbol}, Error: ${fallbackErr.message}\n`);
+             console.error(`Error fetching for fallback ${fallbackSymbol}: ${fallbackErr.message}`);
            }
-        } else {
-           console.error(`No fallback available for ${primarySymbol}. Logging to failed_fetches.log`);
-           fs.appendFileSync(logFilePath, `${new Date().toISOString()} - ${FinInstrmId}, Primary: ${primarySymbol}, No Fallback, Error: ${err.message}\n`);
         }
+      }
+
+      if (!primarySuccess || fetchedRowsCount < 20) {
+        if (nseSymbol && nseSymbol !== fallbackSymbol && nseSymbol !== primarySymbol) {
+          try {
+            console.log(`Fetching history for NSE symbol ${nseSymbol} (Reason: ${!primarySuccess ? 'Error on prior attempts' : 'Fetched < 20 rows on prior attempts'})`);
+            const nseResult = await attemptFetch(nseSymbol);
+            fetchedRowsCount = nseResult?.length || 0;
+            await upsertToDb(nseResult, FinInstrmId);
+            console.log(`Upserted ${fetchedRowsCount} rows for ${nseSymbol}`);
+            if (fetchedRowsCount >= 20) {
+              primarySuccess = true;
+            }
+          } catch (nseErr: any) {
+            console.error(`Error fetching for ${nseSymbol}: ${nseErr.message}`);
+          }
+        }
+      }
+
+      if (!primarySuccess || fetchedRowsCount < 20) {
+         console.error(`All attempts failed for ${primarySymbol}. Logging to failed_fetches.log`);
+         fs.appendFileSync(logFilePath, `${new Date().toISOString()} - ${FinInstrmId}, Primary: ${primarySymbol}, Fallback: ${fallbackSymbol}, NSE: ${nseSymbol}, No fetch succeeded.\n`);
       }
     }
   } catch (err) {
