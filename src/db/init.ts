@@ -207,3 +207,7 @@ export async function initDB() {
     client.release();
   }
 }
+
+if (require.main === module) {
+  initDatabase().catch(console.error);
+}
