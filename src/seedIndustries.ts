@@ -15,13 +15,17 @@ async function seedIndustries() {
   
   try {
     console.log('Creating company_sectors table...');
+    await client.query('DROP TABLE IF EXISTS company_sectors;');
     await client.query(`
-      CREATE TABLE IF NOT EXISTS company_sectors (
+      CREATE TABLE company_sectors (
         fin_instrm_id VARCHAR(50) PRIMARY KEY,
         company_name VARCHAR(255),
         sector_name VARCHAR(255),
         industry_name VARCHAR(255),
-        leaf_name VARCHAR(255)
+        leaf_name VARCHAR(255),
+        sector_code VARCHAR(50),
+        industry_code VARCHAR(50),
+        leaf_code VARCHAR(50)
       )
     `);
 
@@ -43,18 +47,19 @@ async function seedIndustries() {
       const sector_name = data['sector_name'];
       const industry_name = data['industry_name'];
       const leaf_name = data['leaf_name'];
+      const sector_code = data['sector_code'];
+      const industry_code = data['industry_code'];
+      const leaf_code = data['leaf_code'];
 
       if (fin_instrm_id) {
         try {
           await client.query(`
-            INSERT INTO company_sectors (fin_instrm_id, company_name, sector_name, industry_name, leaf_name)
-            VALUES ($1, $2, $3, $4, $5)
-            ON CONFLICT (fin_instrm_id) DO UPDATE SET
-              company_name = EXCLUDED.company_name,
-              sector_name = EXCLUDED.sector_name,
-              industry_name = EXCLUDED.industry_name,
-              leaf_name = EXCLUDED.leaf_name
-          `, [fin_instrm_id, company_name, sector_name, industry_name, leaf_name]);
+            INSERT INTO company_sectors (
+              fin_instrm_id, company_name, sector_name, industry_name, leaf_name, 
+              sector_code, industry_code, leaf_code
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `, [fin_instrm_id, company_name, sector_name, industry_name, leaf_name, sector_code, industry_code, leaf_code]);
           count++;
           if (count % 500 === 0) {
             console.log(`Inserted ${count} rows...`);
