@@ -10,6 +10,8 @@
     "start:spurt": "tsx src/spurtVolume.ts",
     "start:metrics": "tsx src/metricsWorker.ts",
     "clear-metrics": "tsx src/clear_metrics.ts",
+    "seed-industries": "tsx src/seedIndustries.ts",
+    "start:ta": "tsx src/taWorker.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
