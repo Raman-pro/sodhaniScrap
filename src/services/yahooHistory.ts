@@ -97,7 +97,9 @@ export async function fetchHistoricalCatchup() {
         console.error(`Error fetching for ${primarySymbol}: ${err.message}`);
       }
 
-      if (!primarySuccess || fetchedRowsCount < 20) {
+      const isFullFetch = !last_record;
+
+      if (!primarySuccess || (isFullFetch && fetchedRowsCount < 20)) {
         if (fallbackSymbol && fallbackSymbol !== primarySymbol) {
            try {
              console.log(`Trying fallback ${fallbackSymbol} from ${period1} to ${period2} (Reason: ${!primarySuccess ? 'Error on primary' : 'Fetched < 20 rows on primary'})`);
@@ -114,7 +116,7 @@ export async function fetchHistoricalCatchup() {
         }
       }
 
-      if (!primarySuccess || fetchedRowsCount < 20) {
+      if (!primarySuccess || (isFullFetch && fetchedRowsCount < 20)) {
         if (nseSymbol && nseSymbol !== fallbackSymbol && nseSymbol !== primarySymbol) {
           try {
             console.log(`Fetching history for NSE symbol ${nseSymbol} (Reason: ${!primarySuccess ? 'Error on prior attempts' : 'Fetched < 20 rows on prior attempts'})`);
@@ -131,7 +133,7 @@ export async function fetchHistoricalCatchup() {
         }
       }
 
-      if (!primarySuccess || fetchedRowsCount < 20) {
+      if (!primarySuccess || (isFullFetch && fetchedRowsCount < 20)) {
          console.error(`All attempts failed for ${primarySymbol}. Logging to failed_fetches.log`);
          fs.appendFileSync(logFilePath, `${new Date().toISOString()} - ${FinInstrmId}, Primary: ${primarySymbol}, Fallback: ${fallbackSymbol}, NSE: ${nseSymbol}, No fetch succeeded.\n`);
       }
