@@ -80,6 +80,10 @@ export async function fetchHistoricalCatchup() {
         : (process.env.YAHOO_DEFAULT_START_DATE || '1990-01-01'); 
       const period2 = new Date().toISOString().split('T')[0];
       
+      if (period1 === period2) {
+         continue; // Data is up to date, skip fetching
+      }
+      
       const attemptFetch = async (symbol: string) => {
         const result = await yahooFinance.chart(symbol, { period1, period2 });
         return result.quotes || [];
