@@ -1,4 +1,4 @@
-import { pool } from '../db/pool';
+import { pool } from './db/pool';
 
 async function checkMissing() {
   const client = await pool.connect();
@@ -12,7 +12,7 @@ async function checkMissing() {
       ORDER BY hp."FinInstrmId", hp."record_date" DESC
     `);
     
-    let tckrs = historyResult.rows.map(r => r.TckrSymb.trim().toUpperCase());
+    let tckrs = historyResult.rows.map((r: any) => r.TckrSymb.trim().toUpperCase());
     console.log('Total TckrSymbs from DB:', tckrs.length);
     console.log('Sample of first 20 TckrSymbs in DB:');
     console.log(tckrs.slice(0, 20).join(', '));

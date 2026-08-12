@@ -42,6 +42,12 @@ export async function parseCompaniesJson(): Promise<CompanyStock[]> {
   //   }
   // }
 
+  if (parsed.nse_only) {
+    for (const nse of parsed.nse_only) {
+      companies.push({ FinInstrmId: nse, TckrSymb: `${nse}.NS` });
+    }
+  }
+
   return companies;
 }
 

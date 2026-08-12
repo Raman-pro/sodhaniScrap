@@ -62,7 +62,9 @@ export async function fetchHistoricalCatchup() {
 
     for (const stock of stocks) {
       const { FinInstrmId, TckrSymb, last_record } = stock;
-      const primarySymbol = `${FinInstrmId}.BO`;
+      
+      const isBseCode = /^\d{6}$/.test(FinInstrmId);
+      const primarySymbol = isBseCode ? `${FinInstrmId}.BO` : (TckrSymb && TckrSymb.endsWith('.NS') ? TckrSymb : `${FinInstrmId}.NS`);
       
       let fallbackSymbol = null;
       if (TckrSymb && TckrSymb !== primarySymbol && TckrSymb !== FinInstrmId) {
