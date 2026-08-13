@@ -199,6 +199,55 @@ export async function initDB() {
       );
     `);
 
+    // Create bse_indices table (master list of BSE indices)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "bse_indices"(
+          "sccode" VARCHAR(10) PRIMARY KEY,
+          "scname" VARCHAR(255) NOT NULL,
+          "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // One-time migration: the old two-table indices schema (bse_index_history keyed on
+    // record_date DATE + a separate bse_index_intraday) is replaced by a single
+    // timestamped bse_index_history. Data is refetched by the resumable backfill.
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'bse_index_history' AND column_name = 'record_date'
+        ) THEN
+          DROP TABLE "bse_index_history";
+        END IF;
+      END $$;
+    `);
+
+    await client.query(`
+      DROP TABLE IF EXISTS "bse_index_intraday";
+    `);
+
+    // Create bse_index_history table (unified BSE index series: daily bars at midnight
+    // with session NULL, and intraday ticks with session 'preopen'/'regular')
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "bse_index_history"(
+          "sccode" VARCHAR(10) NOT NULL,
+          "record_time" TIMESTAMP NOT NULL,
+          "value" DECIMAL(14, 4) NULL,
+          "prev_close" DECIMAL(14, 4) NULL,
+          "change_val" DECIMAL(14, 4) NULL,
+          "change_pct" DECIMAL(14, 4) NULL,
+          "session" VARCHAR(10) NULL,
+          "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY("sccode", "record_time")
+      );
+    `);
+
+    // Create B-Tree index for optimization
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "bse_index_history_idx" ON "bse_index_history"("sccode", "record_time" DESC);
+    `);
+
     console.log('Database schema initialized successfully.');
   } catch (error) {
     console.error('Error initializing database schema:', error);
