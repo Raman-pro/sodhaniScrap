@@ -8,7 +8,7 @@ export async function initDB() {
     // Create company_stock table
     await client.query(`
       CREATE TABLE IF NOT EXISTS "company_stock"(
-          "FinInstrmId" BIGINT NOT NULL,
+          "FinInstrmId" VARCHAR(50) NOT NULL,
           "TradDt" DATE NULL,
           "BizDt" DATE NULL,
           "Sgmt" VARCHAR(10) NULL,
@@ -42,7 +42,7 @@ export async function initDB() {
     // Create historical_prices table
     await client.query(`
       CREATE TABLE IF NOT EXISTS "historical_prices"(
-          "FinInstrmId" BIGINT NOT NULL,
+          "FinInstrmId" VARCHAR(50) NOT NULL,
           "record_date" TIMESTAMP NOT NULL,
           "open_price" DECIMAL(14, 6) NULL,
           "high_price" DECIMAL(14, 6) NULL,

@@ -43,13 +43,8 @@ export async function parseCompaniesJson(): Promise<CompanyStock[]> {
   // }
 
   if (parsed.nse_only) {
-    const crypto = require('crypto');
     for (const nse of parsed.nse_only) {
-      // Generate a stable 14-digit integer from the symbol string to fit in BIGINT
-      const hash = crypto.createHash('md5').update(nse).digest('hex');
-      const num = parseInt(hash.substring(0, 11), 16); 
-      const nseId = (1000000 + num).toString();
-      companies.push({ FinInstrmId: nseId, TckrSymb: `${nse}.NS` });
+      companies.push({ FinInstrmId: nse, TckrSymb: `${nse}.NS` });
     }
   }
 
