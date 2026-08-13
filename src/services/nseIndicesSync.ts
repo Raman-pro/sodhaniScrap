@@ -148,7 +148,8 @@ export async function nseIndicesLiveSync() {
     
     try {
         // Prepare map of TckrSymb to FinInstrmId (to correctly resolve dual-listed stocks which use BSE scrip codes as FinInstrmId)
-        const validCodesRes = await client.query('SELECT "FinInstrmId", "TckrSymb" FROM company_stock WHERE "TckrSymb" LIKE \'%.NS\'');
+        // BSE Bhavcopy inserts raw tickers (e.g., 'RELIANCE'), while NSE-only inserts have '.NS' (e.g., 'JIOFIN.NS').
+        const validCodesRes = await client.query('SELECT "FinInstrmId", "TckrSymb" FROM company_stock');
         const validCodesMap = new Map();
         for (const row of validCodesRes.rows) {
             validCodesMap.set(row.TckrSymb, row.FinInstrmId);
@@ -216,8 +217,9 @@ export async function nseIndicesLiveSync() {
                     const recordDate = new Date().toISOString().split('T')[0];
 
                     for (const stock of constituentStocks) {
-                        const tckr = stock.symbol + '.NS';
-                        const dbFinInstrmId = validCodesMap.get(tckr);
+                        const rawTckr = stock.symbol;
+                        const nsTckr = stock.symbol + '.NS';
+                        const dbFinInstrmId = validCodesMap.get(rawTckr) || validCodesMap.get(nsTckr);
                         
                         if (dbFinInstrmId) {
                             // Upsert mapping
