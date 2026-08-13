@@ -166,7 +166,7 @@ export async function nseIndicesLiveSync() {
                 
                 if (constituents.length > 0) {
                     // Extract Index Data (Priority 1)
-                    const indexData = constituents.find((c: any) => c.identifier === idx.symbol || c.symbol === idx.symbol);
+                    const indexData = constituents.find((c: any) => c.priority === 1);
                     if (indexData) {
                         const recordTime = indexData.lastUpdateTime 
                             ? new Date(indexData.lastUpdateTime).toISOString().replace('T', ' ').split('.')[0] 
@@ -213,13 +213,14 @@ export async function nseIndicesLiveSync() {
                     const recordDate = new Date().toISOString().split('T')[0];
 
                     for (const stock of constituentStocks) {
-                        if (validCodes.has(stock.symbol)) {
+                        const dbSymbol = stock.symbol + '.NS';
+                        if (validCodes.has(dbSymbol)) {
                             // Upsert mapping
-                            relValues.push([idx.symbol, stock.symbol]);
+                            relValues.push([idx.symbol, dbSymbol]);
 
                             // Upsert live price using exact true API data
                             priceValues.push([
-                                stock.symbol,
+                                dbSymbol,
                                 recordDate,
                                 stock.open,
                                 stock.dayHigh,
