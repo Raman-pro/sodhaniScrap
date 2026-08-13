@@ -151,9 +151,10 @@ export async function nseIndicesLiveSync() {
         const validCodesRes = await client.query('SELECT "FinInstrmId" FROM company_stock WHERE "TckrSymb" LIKE \'%.NS\'');
         const validCodes = new Set(validCodesRes.rows.map(r => r.FinInstrmId));
         
+        console.log(`[NSE Debug] Initializing live sync. Valid stock codes count: ${validCodes.size}`);
+        
         for (const idx of indices) {
             const url = `https://www.nseindia.com/api/NextApi/apiClient/marketWatchApi?functionName=getIndicesData&symbol=${encodeURIComponent(idx.symbol)}`;
-            console.log(`[NSE Debug] Fetching live data for ${idx.symbol} from: ${url}`);
             const res = await curlFetch(url);
 
             if (!res) {
@@ -172,6 +173,7 @@ export async function nseIndicesLiveSync() {
                             : new Date().toISOString().replace('T', ' ').split('.')[0];
                             
                         const todayStr = recordTime.split(' ')[0];
+                        console.log(`[NSE Debug] Found indexData for ${idx.symbol}. recordTime: ${recordTime}. Updating daily summary...`);
 
                         // Insert daily summary
                         const dailyQuery = format(`
@@ -198,6 +200,9 @@ export async function nseIndicesLiveSync() {
                                 updated_at = CURRENT_TIMESTAMP
                         `, [[idx.symbol, recordTime, indexData.lastPrice]]);
                         await client.query(intradayQuery);
+                        console.log(`[NSE Debug] Successfully inserted index history for ${idx.symbol}`);
+                    } else {
+                        console.log(`[NSE Debug] indexData NOT FOUND for ${idx.symbol}. Constituents:`, constituents.map((c: any) => c.symbol).slice(0, 5));
                     }
 
                     // Extract Constituents
@@ -225,6 +230,8 @@ export async function nseIndicesLiveSync() {
                         }
                     }
 
+                    console.log(`[NSE Debug] Matching valid stocks for ${idx.symbol}: ${relValues.length} / ${constituentStocks.length}`);
+
                     if (relValues.length > 0) {
                         const relQuery = format(`
                             INSERT INTO nse_index_constituents (index_symbol, stock_symbol)
@@ -247,6 +254,7 @@ export async function nseIndicesLiveSync() {
                                 volume = EXCLUDED.volume
                         `, priceValues);
                         await client.query(priceQuery);
+                        console.log(`[NSE Debug] Successfully inserted constituent prices for ${idx.symbol}`);
                     }
                 }
             }
