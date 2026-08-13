@@ -2,6 +2,7 @@ import { initDB } from './db/init';
 import { bootstrapMasterList } from './services/bootstrap';
 import { fetchHistoricalCatchup } from './services/yahooHistory';
 import { bseLiveSync } from './services/bseLiveSync';
+import { nseLiveSync } from './services/nseLiveSync';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,10 +14,12 @@ async function startLivePolling() {
     
   // Run immediately first
   await bseLiveSync();
+  await nseLiveSync();
     
   // Then schedule
   setInterval(async () => {
     await bseLiveSync();
+    await nseLiveSync();
   }, POLL_INTERVAL_MS);
 }
 
