@@ -114,17 +114,34 @@ export function parseGraphResponse(raw: any): { header: IndexGraphHeader | null;
     return { header, points };
 }
 
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+const execFileAsync = promisify(execFile);
+
 async function fetchGraphData(sccode: string, opts: { flag: 0 | 1; seriesid: 'DT' | 'R'; frd: string; tod: string }) {
     const url = `${GRAPH_DATA_URL}?index=${sccode}&flag=${opts.flag}&sector=&seriesid=${opts.seriesid}&frd=${opts.frd}&tod=${opts.tod}`;
     try {
-        const response = await axios.get(url, {
-            headers: HEADERS,
-            timeout: 15000,
-            insecureHTTPParser: true
-        } as any);
-        return parseGraphResponse(response.data);
+        const { stdout } = await execFileAsync('curl', [
+            '-s', '-m', '15',
+            '-H', `accept: ${HEADERS.accept}`,
+            '-H', `accept-encoding: ${HEADERS['accept-encoding']}`,
+            '-H', `accept-language: ${HEADERS['accept-language']}`,
+            '-H', `origin: ${HEADERS.origin}`,
+            '-H', `priority: ${HEADERS.priority}`,
+            '-H', `referer: ${HEADERS.referer}`,
+            '-H', `sec-ch-ua: ${HEADERS['sec-ch-ua']}`,
+            '-H', `sec-ch-ua-mobile: ${HEADERS['sec-ch-ua-mobile']}`,
+            '-H', `sec-ch-ua-platform: ${HEADERS['sec-ch-ua-platform']}`,
+            '-H', `sec-fetch-dest: ${HEADERS['sec-fetch-dest']}`,
+            '-H', `sec-fetch-mode: ${HEADERS['sec-fetch-mode']}`,
+            '-H', `sec-fetch-site: ${HEADERS['sec-fetch-site']}`,
+            '-H', `user-agent: ${HEADERS['user-agent']}`,
+            url
+        ], { maxBuffer: 10 * 1024 * 1024 });
+        
+        return parseGraphResponse(stdout);
     } catch (error: any) {
-        console.error(`Indices Fetch Error for sccode=${sccode}:`, error.message);
+        console.error(`Indices Fetch Error for sccode=${sccode} (curl):`, error.message);
         return { header: null, points: [] };
     }
 }
