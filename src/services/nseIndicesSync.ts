@@ -16,7 +16,7 @@ const REQUEST_DELAY_MS = parseInt(process.env.INDICES_REQUEST_DELAY_MS || '300',
 async function curlFetch(url: string) {
     try {
         const { stdout } = await execFileAsync('curl', [
-            '-s',
+            '-s', '-m', '15',
             '-H', 'accept: application/json',
             '-H', 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
             '-H', 'Referer: https://www.nseindia.com/',
