@@ -197,12 +197,18 @@ export async function nseIndicesLiveSync() {
 
                         // Insert intraday tick
                         const intradayQuery = format(`
-                            INSERT INTO nse_index_history (symbol, record_time, value)
+                            INSERT INTO nse_index_history (symbol, record_time, value, prev_close, change_val, change_pct, advances, declines, unchanged)
                             VALUES %L
                             ON CONFLICT (symbol, record_time) DO UPDATE SET
                                 value = EXCLUDED.value,
+                                prev_close = EXCLUDED.prev_close,
+                                change_val = EXCLUDED.change_val,
+                                change_pct = EXCLUDED.change_pct,
+                                advances = EXCLUDED.advances,
+                                declines = EXCLUDED.declines,
+                                unchanged = EXCLUDED.unchanged,
                                 updated_at = CURRENT_TIMESTAMP
-                        `, [[idx.symbol, recordTime, indexData.lastPrice]]);
+                        `, [[idx.symbol, recordTime, indexData.lastPrice, indexData.previousClose, indexData.change, indexData.pChange, aduCount.advances, aduCount.declines, aduCount.unchange]]);
                         await client.query(intradayQuery);
                         console.log(`[NSE Debug] Successfully inserted index history for ${idx.symbol}`);
                     } else {
