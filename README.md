@@ -16,6 +16,9 @@ When the daemon starts via `npm start`, it runs through 3 phases:
 ### Corporate Announcements Worker
 The corporate announcements fetcher is separated into its own independent worker so it can be scaled, paused, or run on a different cadence than the core price ingestion daemon.
 
+### BSE Indices Worker
+A separate worker ingests BSE index-level data (SENSEX and ~77 other sectoral/thematic indices, defined in `indices.json`) using the same BSE Graph Data API used by the website. On start it seeds `bse_indices` from `indices.json`, backfills `INDICES_HISTORY_YEARS` (default 1 year) of daily closes per index into `bse_index_history`, then polls every `INDICES_POLL_INTERVAL_MS` (default 10 minutes) to refresh today's close and capture the full intraday minute series, all into the same `bse_index_history` table. The backfill is resumable — subsequent runs only fetch the gap since each index's last synced date.
+
 ## Prerequisites
 
 * **Node.js**: v18 or later.
@@ -52,6 +55,11 @@ The corporate announcements fetcher is separated into its own independent worker
    BSE_ANNOUNCEMENTS_URL=https://api.bseindia.com/BseIndiaAPI/api/AnnSubCategoryGetData/w
    ANNOUNCEMENTS_POLL_INTERVAL_MS=600000
    ANNOUNCEMENTS_START_DATE=2026-07-01
+
+   # Indices Worker Configuration
+   INDICES_POLL_INTERVAL_MS=600000
+   INDICES_HISTORY_YEARS=1
+   INDICES_REQUEST_DELAY_MS=300
    ```
 
 3. **Provide Source Files**
@@ -75,6 +83,20 @@ To run the BSE announcements fetcher in parallel, open a second terminal window 
 npm run start:announcements
 ```
 *(This script accepts the `--skip_start` flag if you want to bypass database initialization).*
+
+### Running the BSE Indices Worker
+
+To run the BSE indices fetcher in parallel, open another terminal window and run:
+
+```bash
+npm run start:indices
+```
+
+To skip database init, seeding, and the history backfill and jump straight into the live polling loop:
+
+```bash
+npm run skip_start:indices
+```
 
 ### Skipping Bootstrapping (Live Sync Only)
 
@@ -103,3 +125,5 @@ The pipeline enforces a tight schema:
 * `historical_prices`: Narrow time-series table. Uses a composite primary key on `("FinInstrmId", "record_date")` and a B-Tree Index on `("FinInstrmId", "record_date" DESC)` to allow sub-millisecond chart lookups.
 * `bse_announcements`: Contains fetched corporate announcements. Uses indexed columns for efficient filtering.
 * `sync_metadata`: Generic key-value store to maintain state (e.g., `last_newsid`) entirely within the database.
+* `bse_indices`: Static master list of BSE indices (`sccode`, `scname`) seeded from `indices.json`.
+* `bse_index_history`: Unified BSE index series (daily closes and intraday ticks). Composite primary key on `("sccode", "record_time")`. Daily bars are stored at midnight with `session` NULL; intraday ticks carry a real time-of-day and `session` of `preopen`/`regular` — `session IS NULL` distinguishes a daily bar from a tick.

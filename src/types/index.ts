@@ -35,3 +35,25 @@ export interface HistoricalPrice {
   dividends?: number;
   stock_splits?: number;
 }
+
+export interface BseIndex {
+  sccode: string;
+  scname: string;
+}
+
+export interface IndexGraphHeader {
+  currDate?: string;
+  PreClose?: string;
+  MinLow?: string;
+  MaxLow?: string;
+  Scrip?: string;
+  LatestVal?: string;
+  LatestTime?: string;
+  source?: string;
+}
+
+export interface IndexHistoryPoint {
+  date: string;
+  value: string;
+  session: 'preopen' | 'regular';
+}

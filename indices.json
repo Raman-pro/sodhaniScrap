@@ -1,0 +1,310 @@
+[
+  {
+    "scname": "BSE India 150",
+    "sccode": "149"
+  },
+  {
+    "scname": "BSE SENSEX",
+    "sccode": "16"
+  },
+  {
+    "scname": "BSE 100",
+    "sccode": "22"
+  },
+  {
+    "scname": "BSE Bharat 22 Index",
+    "sccode": "100"
+  },
+  {
+    "scname": "BSE 200",
+    "sccode": "23"
+  },
+  {
+    "scname": "BSE MidCap Select Index",
+    "sccode": "94"
+  },
+  {
+    "scname": "BSE SmallCap Select Index",
+    "sccode": "95"
+  },
+  {
+    "scname": "BSE 500",
+    "sccode": "17"
+  },
+  {
+    "scname": "BSE SENSEX 50",
+    "sccode": "98"
+  },
+  {
+    "scname": "BSE SENSEX Next 50",
+    "sccode": "99"
+  },
+  {
+    "scname": "BSE 150 MidCap Index",
+    "sccode": "102"
+  },
+  {
+    "scname": "BSE 250 SmallCap Index",
+    "sccode": "103"
+  },
+  {
+    "scname": "BSE SENSEX NEXT 30",
+    "sccode": "127"
+  },
+  {
+    "scname": "BSE 250 LargeMidCap Index",
+    "sccode": "104"
+  },
+  {
+    "scname": "BSE 400 MidSmallCap Index",
+    "sccode": "105"
+  },
+  {
+    "scname": "BSE 100 LargeCap TMC Index",
+    "sccode": "113"
+  },
+  {
+    "scname": "BSE SENSEX SIXTY",
+    "sccode": "129"
+  },
+  {
+    "scname": "BSE 1000",
+    "sccode": "142"
+  },
+  {
+    "scname": "BSE FOCUSED MIDCAP",
+    "sccode": "137"
+  },
+  {
+    "scname": "BSE SENSEX EQUAL WEIGHT",
+    "sccode": "138"
+  },
+  {
+    "scname": "BSE 100 ESG Index",
+    "sccode": "101"
+  },
+  {
+    "scname": "BSE Private Banks Index",
+    "sccode": "114"
+  },
+  {
+    "scname": "BSE PSU BANK",
+    "sccode": "140"
+  },
+  {
+    "scname": "BSE INDIA SECTOR LEADERS",
+    "sccode": "141"
+  },
+  {
+    "scname": "BSE India Defence",
+    "sccode": "155"
+  },
+  {
+    "scname": "BSE PSU",
+    "sccode": "44"
+  },
+  {
+    "scname": "BSE India Infrastructure Index",
+    "sccode": "79"
+  },
+  {
+    "scname": "BSE CPSE",
+    "sccode": "80"
+  },
+  {
+    "scname": "BSE India Manufacturing Index",
+    "sccode": "86"
+  },
+  {
+    "scname": "BSE Diversified Financials Revenue Growth Index",
+    "sccode": "111"
+  },
+  {
+    "scname": "BSE POWER & ENERGY",
+    "sccode": "131"
+  },
+  {
+    "scname": "BSE INTERNET ECONOMY",
+    "sccode": "132"
+  },
+  {
+    "scname": "BSE CAPITAL MARKETS & INSURANCE",
+    "sccode": "133"
+  },
+  {
+    "scname": "BSE SELECT BUSINESS GROUPS",
+    "sccode": "136"
+  },
+  {
+    "scname": "BSE PREMIUM CONSUMPTION",
+    "sccode": "135"
+  },
+  {
+    "scname": "BSE 500 Quality 50",
+    "sccode": "147"
+  },
+  {
+    "scname": "BSE Midcap 150 Momentum 30",
+    "sccode": "168"
+  },
+  {
+    "scname": "BSE 500 Dividend Leaders 50",
+    "sccode": "150"
+  },
+  {
+    "scname": "BSE 500 Momentum 50 ",
+    "sccode": "152"
+  },
+  {
+    "scname": "BSE LargeMid (60:40) Stable Dividend 50 ",
+    "sccode": "195"
+  },
+  {
+    "scname": "BSE IPO",
+    "sccode": "72"
+  },
+  {
+    "scname": "BSE SME IPO",
+    "sccode": "76"
+  },
+  {
+    "scname": "BSE Dividend Stability Index",
+    "sccode": "106"
+  },
+  {
+    "scname": "BSE Enhanced Value Index",
+    "sccode": "107"
+  },
+  {
+    "scname": "BSE Low Volatility Index",
+    "sccode": "108"
+  },
+  {
+    "scname": "BSE Momentum Index",
+    "sccode": "109"
+  },
+  {
+    "scname": "BSE Quality Index ",
+    "sccode": "110"
+  },
+  {
+    "scname": "BSE 200 EQUAL WEIGHT INDEX",
+    "sccode": "128"
+  },
+  {
+    "scname": "BSE SENSEX SIXTY 65:35",
+    "sccode": "130"
+  },
+  {
+    "scname": "BSE SELECT IPO",
+    "sccode": "139"
+  },
+  {
+    "scname": "BSE Insurance",
+    "sccode": "154"
+  },
+  {
+    "scname": "BSE MidSmall Private Banks Quality Tilt",
+    "sccode": "177"
+  },
+  {
+    "scname": "BSE Housing Finance",
+    "sccode": "190"
+  },
+  {
+    "scname": "BSE Hospitals",
+    "sccode": "158"
+  },
+  {
+    "scname": "BSE AUTO",
+    "sccode": "42"
+  },
+  {
+    "scname": "BSE BANKEX",
+    "sccode": "53"
+  },
+  {
+    "scname": "BSE CONSUMER DURABLES",
+    "sccode": "27"
+  },
+  {
+    "scname": "BSE CAPITAL GOODS",
+    "sccode": "25"
+  },
+  {
+    "scname": "BSE Fast Moving Consumer Goods",
+    "sccode": "83"
+  },
+  {
+    "scname": "BSE Commodities",
+    "sccode": "88"
+  },
+  {
+    "scname": "BSE Consumer Discretionary",
+    "sccode": "89"
+  },
+  {
+    "scname": "BSE Energy",
+    "sccode": "90"
+  },
+  {
+    "scname": "BSE Financial Services",
+    "sccode": "91"
+  },
+  {
+    "scname": "BSE Industrials",
+    "sccode": "92"
+  },
+  {
+    "scname": "BSE Telecommunication",
+    "sccode": "96"
+  },
+  {
+    "scname": "BSE Utilities",
+    "sccode": "97"
+  },
+  {
+    "scname": "BSE Healthcare",
+    "sccode": "84"
+  },
+  {
+    "scname": "BSE Information Technology",
+    "sccode": "85"
+  },
+  {
+    "scname": "BSE METAL",
+    "sccode": "35"
+  },
+  {
+    "scname": "BSE OIL & GAS",
+    "sccode": "37"
+  },
+  {
+    "scname": "BSE POWER",
+    "sccode": "69"
+  },
+  {
+    "scname": "BSE REALTY",
+    "sccode": "67"
+  },
+  {
+    "scname": "BSE TECK",
+    "sccode": "45"
+  },
+  {
+    "scname": "BSE Services",
+    "sccode": "121"
+  },
+  {
+    "scname": "BSE MidSmall Private Banks",
+    "sccode": "196"
+  },
+  {
+    "scname": "BSE Focused IT ",
+    "sccode": "134"
+  },
+  {
+    "scname": "BSE Top 10 Banks",
+    "sccode": "161"
+  }
+]

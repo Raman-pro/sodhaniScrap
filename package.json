@@ -12,6 +12,8 @@
     "clear-metrics": "tsx src/clear_metrics.ts",
     "seed-industries": "tsx src/seedIndustries.ts",
     "start:ta": "tsx src/taWorker.ts",
+    "start:indices": "tsx src/indices.ts",
+    "skip_start:indices": "tsx src/indices.ts --skip_start",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
