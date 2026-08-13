@@ -147,11 +147,14 @@ export async function nseIndicesLiveSync() {
     const client = await pool.connect();
     
     try {
-        // Prepare list of valid stocks so we don't insert garbage into historical_prices
-        const validCodesRes = await client.query('SELECT "FinInstrmId" FROM company_stock WHERE "TckrSymb" LIKE \'%.NS\'');
-        const validCodes = new Set(validCodesRes.rows.map(r => r.FinInstrmId));
+        // Prepare map of TckrSymb to FinInstrmId (to correctly resolve dual-listed stocks which use BSE scrip codes as FinInstrmId)
+        const validCodesRes = await client.query('SELECT "FinInstrmId", "TckrSymb" FROM company_stock WHERE "TckrSymb" LIKE \'%.NS\'');
+        const validCodesMap = new Map();
+        for (const row of validCodesRes.rows) {
+            validCodesMap.set(row.TckrSymb, row.FinInstrmId);
+        }
         
-        console.log(`[NSE Debug] Initializing live sync. Valid stock codes count: ${validCodes.size}`);
+        console.log(`[NSE Debug] Initializing live sync. Valid stock codes mapped: ${validCodesMap.size}`);
         
         for (const idx of indices) {
             const url = `https://www.nseindia.com/api/NextApi/apiClient/marketWatchApi?functionName=getIndicesData&symbol=${encodeURIComponent(idx.symbol)}`;
@@ -213,14 +216,16 @@ export async function nseIndicesLiveSync() {
                     const recordDate = new Date().toISOString().split('T')[0];
 
                     for (const stock of constituentStocks) {
-                        const dbSymbol = stock.symbol + '.NS';
-                        if (validCodes.has(dbSymbol)) {
+                        const tckr = stock.symbol + '.NS';
+                        const dbFinInstrmId = validCodesMap.get(tckr);
+                        
+                        if (dbFinInstrmId) {
                             // Upsert mapping
-                            relValues.push([idx.symbol, dbSymbol]);
+                            relValues.push([idx.symbol, dbFinInstrmId]);
 
                             // Upsert live price using exact true API data
                             priceValues.push([
-                                dbSymbol,
+                                dbFinInstrmId,
                                 recordDate,
                                 stock.open,
                                 stock.dayHigh,
