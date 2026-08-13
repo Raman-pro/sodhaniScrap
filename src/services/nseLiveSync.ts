@@ -25,22 +25,12 @@ async function fetchNSEData(url: string) {
 export async function nseLiveSync() {
   console.log(`[${new Date().toISOString()}] Phase 3: Executing NSE Live Sync...`);
   
-  const advanceUrl = 'https://www.nseindia.com/api/live-analysis-advance';
-  const declineUrl = 'https://www.nseindia.com/api/live-analysis-decline';
-  const unchangedUrl = 'https://www.nseindia.com/api/live-analysis-unchanged';
+  const url = 'https://www.nseindia.com/api/live-analysis-stocksTraded';
 
-  const [advanceRes, declineRes, unchangedRes] = await Promise.all([
-    fetchNSEData(advanceUrl),
-    fetchNSEData(declineUrl),
-    fetchNSEData(unchangedUrl)
-  ]);
+  const res = await fetchNSEData(url);
 
-  const advances = advanceRes?.advance?.data || [];
-  const declines = declineRes?.decline?.data || [];
-  const unchanged = unchangedRes?.Unchange?.data || [];
-
-  const allData = [...advances, ...declines, ...unchanged];
-  console.log(`Fetched ${advances.length} advances, ${declines.length} declines, ${unchanged.length} unchanged from NSE.`);
+  const allData = res?.total?.data || [];
+  console.log(`Fetched ${allData.length} records from NSE stocksTraded API.`);
 
   if (allData.length === 0) {
     console.log('No data fetched from NSE.');
