@@ -224,8 +224,7 @@ export async function nseIndicesLiveSync() {
 
                     for (const stock of constituentStocks) {
                         const rawTckr = stock.symbol;
-                        const nsTckr = stock.symbol + '.NS';
-                        const dbFinInstrmId = validCodesMap.get(rawTckr) || validCodesMap.get(nsTckr);
+                        const dbFinInstrmId = validCodesMap.get(rawTckr);
                         
                         if (dbFinInstrmId) {
                             // Upsert mapping

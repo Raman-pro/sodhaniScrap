@@ -41,12 +41,15 @@ export async function nseLiveSync() {
   const client = await pool.connect();
 
   try {
-    // We only care about NSE stocks that are already in our database
-    const validCodesRes = await client.query('SELECT "FinInstrmId" FROM company_stock WHERE "TckrSymb" LIKE \'%.NS\'');
-    const validCodes = new Set(validCodesRes.rows.map(r => r.FinInstrmId));
+    // We only care about NSE stocks that are already in our database (either BSE dual-listed or NSE-only)
+    const validCodesRes = await client.query('SELECT "FinInstrmId", "TckrSymb" FROM company_stock');
+    const validCodesMap = new Map();
+    for (const row of validCodesRes.rows) {
+        validCodesMap.set(row.TckrSymb, row.FinInstrmId);
+    }
     
-    if (validCodes.size === 0) {
-      console.log('No NSE equities found in database to update.');
+    if (validCodesMap.size === 0) {
+      console.log('No equities found in database to update.');
       return;
     }
 
@@ -58,10 +61,11 @@ export async function nseLiveSync() {
       // NSE data doesn't provide exact open/high/low in this endpoint.
       // We extract symbol, lastPrice (close), and totalTradedVolume.
       const symbol = item.symbol;
+      const finInstrmId = validCodesMap.get(symbol);
       
-      if (validCodes.has(symbol)) {
-        if (!seen.has(symbol)) {
-          seen.add(symbol);
+      if (finInstrmId) {
+        if (!seen.has(finInstrmId)) {
+          seen.add(finInstrmId);
           
           // The API sometimes provides volume in decimal representation of lakhs. 
           // We convert it to a whole number by multiplying by 100,000, 
@@ -70,7 +74,7 @@ export async function nseLiveSync() {
           const absoluteVolume = Math.floor(rawVolume * 100000);
 
           values.push([
-            symbol, // FinInstrmId
+            finInstrmId, // FinInstrmId
             recordDate,
             item.lastPrice, // Initial open_price guess
             item.lastPrice, // Initial high_price guess
