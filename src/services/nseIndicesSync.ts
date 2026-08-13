@@ -153,9 +153,13 @@ export async function nseIndicesLiveSync() {
         
         for (const idx of indices) {
             const url = `https://www.nseindia.com/api/NextApi/apiClient/marketWatchApi?functionName=getIndicesData&symbol=${encodeURIComponent(idx.symbol)}`;
+            console.log(`[NSE Debug] Fetching live data for ${idx.symbol} from: ${url}`);
             const res = await curlFetch(url);
 
-            if (res?.data) {
+            if (!res) {
+                console.warn(`[NSE Debug] Failed to fetch data for ${idx.symbol} (Timeout or Error)`);
+            } else if (res?.data) {
+                console.log(`[NSE Debug] Successfully fetched data for ${idx.symbol}. Constituents count: ${res.data.data?.length}`);
                 const aduCount = res.data.aduCount || { advances: null, declines: null, unchange: null };
                 const constituents = res.data.data || [];
                 
