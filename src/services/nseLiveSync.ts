@@ -71,7 +71,10 @@ export async function nseLiveSync() {
           values.push([
             symbol, // FinInstrmId
             recordDate,
-            item.lastPrice, // Update the close price to the live price
+            item.lastPrice, // Initial open_price guess
+            item.lastPrice, // Initial high_price guess
+            item.lastPrice, // Initial low_price guess
+            item.lastPrice, // close_price (current price)
             absoluteVolume
           ]);
         }
@@ -85,12 +88,15 @@ export async function nseLiveSync() {
 
     const query = format(`
       INSERT INTO historical_prices 
-      ("FinInstrmId", record_date, close_price, volume)
+      ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, volume)
       VALUES %L
       ON CONFLICT ("FinInstrmId", record_date) 
       DO UPDATE SET 
-        close_price = COALESCE(EXCLUDED.close_price, historical_prices.close_price),
-        volume = COALESCE(EXCLUDED.volume, historical_prices.volume)
+        open_price = COALESCE(historical_prices.open_price, EXCLUDED.open_price),
+        high_price = GREATEST(historical_prices.high_price, EXCLUDED.close_price),
+        low_price = LEAST(historical_prices.low_price, EXCLUDED.close_price),
+        close_price = EXCLUDED.close_price,
+        volume = EXCLUDED.volume
     `, values);
 
     await client.query(query);
