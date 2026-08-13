@@ -1,5 +1,6 @@
 import { initDB } from './db/init';
 import { seedIndices, indicesHistoryBackfill, indicesSync } from './services/indicesSync';
+import { seedNseIndices, nseIndicesHistoryBackfill, nseIndicesLiveSync } from './services/nseIndicesSync';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -11,10 +12,12 @@ async function startIndicesPolling() {
 
   // Run immediately first
   await indicesSync();
+  await nseIndicesLiveSync();
 
   // Then schedule
   setInterval(async () => {
     await indicesSync();
+    await nseIndicesLiveSync();
   }, INDICES_POLL_INTERVAL_MS);
 }
 
@@ -26,7 +29,9 @@ async function main() {
       console.log('Initializing DB for Indices Worker...');
       await initDB();
       await seedIndices();
+      await seedNseIndices();
       await indicesHistoryBackfill();
+      await nseIndicesHistoryBackfill();
     } else {
       console.log('Skipping DB init, seed and history backfill for Indices Worker (--skip_start)');
     }

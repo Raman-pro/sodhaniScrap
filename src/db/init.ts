@@ -243,9 +243,49 @@ export async function initDB() {
       );
     `);
 
+    // Create nse_indices table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "nse_indices"(
+          "symbol" VARCHAR(50) PRIMARY KEY,
+          "name" VARCHAR(100) NOT NULL,
+          "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create nse_index_history table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "nse_index_history"(
+          "symbol" VARCHAR(50) REFERENCES "nse_indices"("symbol") ON DELETE CASCADE,
+          "record_time" TIMESTAMP NOT NULL,
+          "value" DECIMAL(14, 4) NOT NULL,
+          "prev_close" DECIMAL(14, 4) NULL,
+          "change_val" DECIMAL(14, 4) NULL,
+          "change_pct" DECIMAL(14, 4) NULL,
+          "advances" INT NULL,
+          "declines" INT NULL,
+          "unchanged" INT NULL,
+          "session" VARCHAR(20) NULL,
+          "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY ("symbol", "record_time")
+      );
+    `);
+
+    // Create nse_index_constituents table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "nse_index_constituents"(
+          "index_symbol" VARCHAR(50) REFERENCES "nse_indices"("symbol") ON DELETE CASCADE,
+          "stock_symbol" VARCHAR(50) NOT NULL,
+          "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY ("index_symbol", "stock_symbol")
+      );
+    `);
+
     // Create B-Tree index for optimization
     await client.query(`
       CREATE INDEX IF NOT EXISTS "bse_index_history_idx" ON "bse_index_history"("sccode", "record_time" DESC);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "nse_index_history_idx" ON "nse_index_history"("symbol", "record_time" DESC);
     `);
 
     console.log('Database schema initialized successfully.');

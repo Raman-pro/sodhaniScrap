@@ -1,0 +1,26 @@
+[
+  {
+    "name": "NIFTY 50",
+    "symbol": "NIFTY 50"
+  },
+  {
+    "name": "NIFTY BANK",
+    "symbol": "NIFTY BANK"
+  },
+  {
+    "name": "NIFTY FIN SERVICE",
+    "symbol": "NIFTY FIN SERVICE"
+  },
+  {
+    "name": "NIFTY FPI 150",
+    "symbol": "NIFTY FPI 150"
+  },
+  {
+    "name": "NIFTY MID SELECT",
+    "symbol": "NIFTY MID SELECT"
+  },
+  {
+    "name": "NIFTY NEXT 50",
+    "symbol": "NIFTY NEXT 50"
+  }
+]
