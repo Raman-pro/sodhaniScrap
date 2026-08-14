@@ -11,7 +11,7 @@ dotenv.config();
 
 const GRAPH_DATA_URL = 'https://api.bseindia.com/BseIndiaAPI/api/SensexGraphData_CAS/w';
 
-const HEADERS = {
+export const HEADERS = {
     "accept": "*/*",
     "accept-encoding": "gzip, deflate, br, zstd",
     "accept-language": "en-US,en-IN;q=0.9,en;q=0.8",

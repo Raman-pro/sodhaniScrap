@@ -280,6 +280,17 @@ export async function initDB() {
       );
     `);
 
+    // Create bse_index_constituents table (BSE index -> member stock mapping,
+    // scraped from the BSE HeatMapData endpoint)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "bse_index_constituents"(
+          "sccode" VARCHAR(10) REFERENCES "bse_indices"("sccode") ON DELETE CASCADE,
+          "FinInstrmId" VARCHAR(50) NOT NULL,
+          "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY ("sccode", "FinInstrmId")
+      );
+    `);
+
     // Create B-Tree index for optimization
     await client.query(`
       CREATE INDEX IF NOT EXISTS "bse_index_history_idx" ON "bse_index_history"("sccode", "record_time" DESC);

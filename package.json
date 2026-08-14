@@ -11,6 +11,7 @@
     "start:metrics": "tsx src/metricsWorker.ts",
     "clear-metrics": "tsx src/clear_metrics.ts",
     "seed-industries": "tsx src/seedIndustries.ts",
+    "backfill-nse-src": "tsx src/scripts/backfillNseSrc.ts",
     "start:ta": "tsx src/taWorker.ts",
     "start:indices": "tsx src/indices.ts",
     "skip_start:indices": "tsx src/indices.ts --skip_start",

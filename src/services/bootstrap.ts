@@ -47,7 +47,7 @@ export async function bootstrapMasterList() {
         csvRow.TradDt || null,
         csvRow.BizDt || null,
         csvRow.Sgmt || null,
-        csvRow.Src || null,
+        csvRow.Src || company.Src || null,
         csvRow.FinInstrmTp || null,
         csvRow.ISIN || null,
         csvRow.TckrSymb || company.TckrSymb || null,

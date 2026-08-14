@@ -1,7 +1,7 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = new Pool();
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 async function runMigration() {
     console.log('Connecting to database to migrate BIGINT to VARCHAR...');

@@ -16,8 +16,12 @@ When the daemon starts via `npm start`, it runs through 3 phases:
 ### Corporate Announcements Worker
 The corporate announcements fetcher is separated into its own independent worker so it can be scaled, paused, or run on a different cadence than the core price ingestion daemon.
 
-### BSE Indices Worker
-A separate worker ingests BSE index-level data (SENSEX and ~77 other sectoral/thematic indices, defined in `indices.json`) using the same BSE Graph Data API used by the website. On start it seeds `bse_indices` from `indices.json`, backfills `INDICES_HISTORY_YEARS` (default 1 year) of daily closes per index into `bse_index_history`, then polls every `INDICES_POLL_INTERVAL_MS` (default 10 minutes) to refresh today's close and capture the full intraday minute series, all into the same `bse_index_history` table. The backfill is resumable — subsequent runs only fetch the gap since each index's last synced date.
+### Indices Worker (BSE + NSE)
+A separate worker (`src/indices.ts`) ingests index-level data for **both exchanges** and polls all of it from a single process:
+
+* **BSE indices** — SENSEX and ~77 other sectoral/thematic indices, defined in `indices.json`, via the BSE Graph Data API used by the website. On start it seeds `bse_indices` from `indices.json`, backfills `INDICES_HISTORY_YEARS` (default 1 year) of daily closes per index into `bse_index_history`, then polls every `INDICES_POLL_INTERVAL_MS` (default 10 minutes) to refresh today's close and capture the full intraday minute series, all into the same `bse_index_history` table. The backfill is resumable — subsequent runs only fetch the gap since each index's last synced date.
+* **NSE indices** — NIFTY 50, BANK, FIN SERVICE, FPI 150, MID SELECT, and NEXT 50, defined in `nse_indices.json`, via NSE's `NextApi` endpoints. On start it seeds `nse_indices`, backfills 1 year of daily closes into `nse_index_history`, then polls on the same `INDICES_POLL_INTERVAL_MS` cadence for today's close, the latest intraday tick, and market-breadth counts (advances/declines/unchanged). Each poll also refreshes that index's constituent mapping (`nse_index_constituents`) and pushes live OHLCV for each constituent straight into `historical_prices`.
+* **BSE index constituents** — a lower-frequency pass (`BSE_CONSTITUENTS_INTERVAL_MS`, default 1 hour) that scrapes BSE's public heatmap feed (`HeatMapData`) for every index in `indices.json` and upserts the ticker → index membership into `bse_index_constituents`. Unlike NSE, **this feed is capped at exactly 30 rows per index by BSE itself** — complete for indices with ≤30 members (SENSEX, BANKEX, sectorals), but only that day's 30 biggest movers for broader indices (BSE 500, BSE 1000, …), so membership for those grows/rotates across runs rather than being a stable, complete set. It does not write prices — those stay owned by the core BSE live sync (Phase 3) to avoid two writers on the same `historical_prices` rows.
 
 ## Prerequisites
 
@@ -56,10 +60,14 @@ A separate worker ingests BSE index-level data (SENSEX and ~77 other sectoral/th
    ANNOUNCEMENTS_POLL_INTERVAL_MS=600000
    ANNOUNCEMENTS_START_DATE=2026-07-01
 
-   # Indices Worker Configuration
+   # Indices Worker Configuration (shared by both BSE and NSE index syncs)
    INDICES_POLL_INTERVAL_MS=600000
    INDICES_HISTORY_YEARS=1
    INDICES_REQUEST_DELAY_MS=300
+
+   # BSE index constituents sync cadence (default 1 hour) - kept far slower
+   # than INDICES_POLL_INTERVAL_MS since membership barely changes intraday
+   BSE_CONSTITUENTS_INTERVAL_MS=3600000
    ```
 
 3. **Provide Source Files**
@@ -84,9 +92,9 @@ npm run start:announcements
 ```
 *(This script accepts the `--skip_start` flag if you want to bypass database initialization).*
 
-### Running the BSE Indices Worker
+### Running the Indices Worker (BSE + NSE)
 
-To run the BSE indices fetcher in parallel, open another terminal window and run:
+To run the BSE + NSE indices fetcher (including BSE index constituents) in parallel, open another terminal window and run:
 
 ```bash
 npm run start:indices
@@ -127,3 +135,7 @@ The pipeline enforces a tight schema:
 * `sync_metadata`: Generic key-value store to maintain state (e.g., `last_newsid`) entirely within the database.
 * `bse_indices`: Static master list of BSE indices (`sccode`, `scname`) seeded from `indices.json`.
 * `bse_index_history`: Unified BSE index series (daily closes and intraday ticks). Composite primary key on `("sccode", "record_time")`. Daily bars are stored at midnight with `session` NULL; intraday ticks carry a real time-of-day and `session` of `preopen`/`regular` — `session IS NULL` distinguishes a daily bar from a tick.
+* `bse_index_constituents`: BSE index → member stock mapping (`sccode`, `"FinInstrmId"`), scraped from BSE's `HeatMapData` heatmap feed. That feed is hard-capped at 30 rows per index, so this table is complete only for indices with ≤30 members — see the Indices Worker section above.
+* `nse_indices`: Static master list of NSE indices (`symbol`, `name`) seeded from `nse_indices.json`.
+* `nse_index_history`: Unified NSE index series (daily closes and intraday ticks), including market-breadth counts (`advances`, `declines`, `unchanged`). Composite primary key on `("symbol", "record_time")`. Unlike the BSE table, `session` is always NULL here — a daily bar vs. an intraday tick is distinguished by whether `record_time`'s time-of-day component is exactly midnight.
+* `nse_index_constituents`: NSE index → member stock mapping (`index_symbol`, `stock_symbol`, the latter actually holding a `company_stock."FinInstrmId"`). Unlike BSE, this is the complete membership for every index (NIFTY 50 → 50 rows, NIFTY FPI 150 → 150 rows, etc.), refreshed on every poll.
