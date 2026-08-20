@@ -29,7 +29,7 @@ async function runTAWorker() {
       `, [finId]);
       
       const rows = historyRes.rows;
-      if (rows.length < 50) {
+      if (rows.length < 14) {
         // Not enough data for meaningful TA
         continue;
       }
@@ -70,73 +70,27 @@ async function runTAWorker() {
       const fib = calculateFibonacci(ohlcv, 60);
       const supertrend = calculateSupertrend(ohlcv, 14, 3);
       
-      // Evaluate signals
-      let bullishCount = 0;
-      let bearishCount = 0;
-      let neutralCount = 0;
-      
-      const evaluateTrend = (val: number | null) => {
-        if (val === null) return null;
-        if (currentPrice > val) { bullishCount++; return "Above"; }
-        if (currentPrice < val) { bearishCount++; return "Below"; }
-        neutralCount++; return "Neutral";
-      };
-      
-      const getRsiSignal = (val: number | null) => {
-        if (val === null) return null;
-        if (val > 70) { bearishCount++; return { signal: "BEARISH", text: "Overbought zone. Potential for pullback." }; }
-        if (val < 30) { bullishCount++; return { signal: "BULLISH", text: "Oversold territory. Potential for bounce." }; }
-        if (val >= 50) { bullishCount++; return { signal: "BULLISH", text: "Positive momentum." }; }
-        bearishCount++; return { signal: "BEARISH", text: "Weak momentum." };
-      };
-      
-      const getStochSignal = (st: any) => {
-        if (!st || st.k === null || st.d === null) return null;
-        if (st.k > 80) { bearishCount++; return { signal: "BEARISH", text: "Overbought zone." }; }
-        if (st.k < 20) { bullishCount++; return { signal: "BULLISH", text: "Oversold zone." }; }
-        if (st.k > st.d) { bullishCount++; return { signal: "BULLISH", text: "Bullish momentum." }; }
-        bearishCount++; return { signal: "BEARISH", text: "Bearish momentum." };
-      };
-      
-      const getMacdSignal = (m: any) => {
-        if (!m || m.macd === null || m.signal === null) return null;
-        if (m.macd > m.signal) { bullishCount++; return { signal: "BULLISH", text: "Bullish momentum." }; }
-        bearishCount++; return { signal: "BEARISH", text: "Bearish momentum." };
-      };
-      
-      const getAdxSignal = (a: any) => {
-        if (!a || a.adx === null) return null;
-        let dir = a.plusDI > a.minusDI ? "BULLISH" : "BEARISH";
-        let strength = a.adx > 25 ? "Strong trend" : "Weak trend";
-        if (a.adx > 25) {
-            if (dir === "BULLISH") bullishCount++; else bearishCount++;
-        } else {
-            neutralCount++;
-        }
-        return { signal: a.adx > 25 ? dir : "NEUTRAL", text: `${strength}.` };
-      };
-      
       const momentum = {
-        rsi: { value: rsi, ...getRsiSignal(rsi) },
-        stochastic: { value: stoch?.k, ...getStochSignal(stoch) },
-        macd: { value: macd?.macd, ...getMacdSignal(macd) },
-        adx: { value: adx?.adx, ...getAdxSignal(adx) }
+        rsi: rsi,
+        stochastic: stoch,
+        macd: macd,
+        adx: adx
       };
       
       const trends = {
         sma: {
-          "10": { value: sma10, signal: evaluateTrend(sma10) },
-          "20": { value: sma20, signal: evaluateTrend(sma20) },
-          "50": { value: sma50, signal: evaluateTrend(sma50) },
-          "100": { value: sma100, signal: evaluateTrend(sma100) },
-          "200": { value: sma200, signal: evaluateTrend(sma200) }
+          "10": sma10,
+          "20": sma20,
+          "50": sma50,
+          "100": sma100,
+          "200": sma200
         },
         ema: {
-          "10": { value: ema10, signal: evaluateTrend(ema10) },
-          "20": { value: ema20, signal: evaluateTrend(ema20) },
-          "50": { value: ema50, signal: evaluateTrend(ema50) },
-          "100": { value: ema100, signal: evaluateTrend(ema100) },
-          "200": { value: ema200, signal: evaluateTrend(ema200) }
+          "10": ema10,
+          "20": ema20,
+          "50": ema50,
+          "100": ema100,
+          "200": ema200
         }
       };
       
@@ -174,19 +128,7 @@ async function runTAWorker() {
       const nearestSupport = supports.length > 0 ? supports[0] : null;
       const nearestResistance = resistances.length > 0 ? resistances[resistances.length - 1] : null;
       
-      let overall = "Neutral";
-      if (bullishCount > bearishCount * 2) overall = "Strong Buy";
-      else if (bullishCount > bearishCount) overall = "Buy";
-      else if (bearishCount > bullishCount * 2) overall = "Strong Sell";
-      else if (bearishCount > bullishCount) overall = "Sell";
-
       const taData = {
-        summary: {
-          bullish: bullishCount,
-          neutral: neutralCount,
-          bearish: bearishCount,
-          overall
-        },
         momentum,
         trends,
         levels: {
