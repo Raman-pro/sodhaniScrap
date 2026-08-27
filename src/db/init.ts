@@ -288,6 +288,30 @@ export async function initDB() {
       CREATE INDEX IF NOT EXISTS "nse_index_history_idx" ON "nse_index_history"("symbol", "record_time" DESC);
     `);
 
+    // Create research_reports table (Business Standard brokerage/research reports)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "research_reports"(
+          "id" SERIAL PRIMARY KEY,
+          "company" VARCHAR(255) NOT NULL,
+          "fin_instrm_id" VARCHAR(50) NULL REFERENCES "company_stock"("FinInstrmId"),
+          "tckr_symb" VARCHAR(20) NULL,
+          "action" VARCHAR(50) NULL,
+          "target_price" DECIMAL(14, 4) NULL,
+          "broker" VARCHAR(255) NULL,
+          "report_date" DATE NOT NULL,
+          "report_url" TEXT NULL,
+          "fetched_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE("company", "broker", "report_date", "target_price")
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "research_reports_report_date_idx" ON "research_reports"("report_date" DESC);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "research_reports_fin_instrm_id_idx" ON "research_reports"("fin_instrm_id");
+    `);
+
     console.log('Database schema initialized successfully.');
   } catch (error) {
     console.error('Error initializing database schema:', error);
