@@ -9,6 +9,10 @@ dotenv.config();
 const PYTHON_BIN = process.env.PYTHON_BIN || 'python';
 const SCRIPT_PATH = path.join(__dirname, '..', '..', 'python', 'get_business_standard_response.py');
 const RESEARCH_REPORTS_DAYS = process.env.RESEARCH_REPORTS_DAYS || '15';
+// How long a report stays in the table after its report_date. Trimmed on
+// every sync cycle so the table doesn't grow unbounded - old reports are
+// discarded as new ones come in, not on a separate schedule.
+const RESEARCH_REPORTS_RETENTION_DAYS = parseInt(process.env.RESEARCH_REPORTS_RETENTION_DAYS || '10', 10);
 
 interface ScrapedReport {
   company: string;
@@ -153,6 +157,17 @@ export async function researchReportsSync(): Promise<void> {
   } catch (error) {
     console.error('Error in researchReportsSync:', error);
   } finally {
+    try {
+      const cleanupRes = await client.query(
+        `DELETE FROM research_reports WHERE report_date < (CURRENT_DATE - $1::int * INTERVAL '1 day')`,
+        [RESEARCH_REPORTS_RETENTION_DAYS],
+      );
+      if (cleanupRes.rowCount) {
+        console.log(`--- Cleanup: removed ${cleanupRes.rowCount} report(s) older than ${RESEARCH_REPORTS_RETENTION_DAYS} days. ---`);
+      }
+    } catch (cleanupError) {
+      console.error('Error cleaning up old research reports:', cleanupError);
+    }
     client.release();
   }
 }
