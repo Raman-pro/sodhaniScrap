@@ -32,9 +32,11 @@ export async function spurtVolumeSync() {
             timeout: 15000,
             insecureHTTPParser: true 
         } as any);
-        const records = response.data || [];
-        
-        console.log(`Fetched ${records.length} Spurt Volume records.`);
+        // BSE scrip codes starting with 5 are equities; other ranges are irrelevant here
+        const allRecords = response.data || [];
+        const records = allRecords.filter((rec: any) => /^5/.test(String(rec.scrip_cd)));
+
+        console.log(`Fetched ${allRecords.length} Spurt Volume records, ${records.length} equities after filtering.`);
 
         if (records.length > 0) {
             const valuesToInsert = [];

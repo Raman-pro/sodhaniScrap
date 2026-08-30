@@ -65,8 +65,11 @@ export async function bseLiveSync() {
   await new Promise(resolve => setTimeout(resolve, 2000));
   const losers = await fetchBSELoserData(loserUrl);
 
-  const gainersList = gainers?.Table || [];
-  const losersList = (losers as any)?.Table || [];
+  // BSE scrip codes starting with 5 are equities; other ranges (debt, mutual funds, etc.) are irrelevant here
+  const isEquityCode = (scripCd: any) => /^5/.test(String(scripCd));
+
+  const gainersList = (gainers?.Table || []).filter((item: any) => isEquityCode(item.scrip_cd));
+  const losersList = ((losers as any)?.Table || []).filter((item: any) => isEquityCode(item.scrip_cd));
   console.log(`Fetched ${gainersList.length} gainers, ${losersList.length} losers from BSE.`);
   if (gainersList.length > 0) {
     console.log(`Top gainer: ${gainersList[0].scripname} change_percent=${gainersList[0].change_percent}`);
