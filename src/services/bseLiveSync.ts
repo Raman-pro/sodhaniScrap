@@ -65,8 +65,12 @@ export async function bseLiveSync() {
   await new Promise(resolve => setTimeout(resolve, 2000));
   const losers = await fetchBSELoserData(loserUrl);
 
-  // BSE scrip codes starting with 5 are equities; other ranges (debt, mutual funds, etc.) are irrelevant here
-  const isEquityCode = (scripCd: any) => /^5/.test(String(scripCd));
+  // Fully numeric BSE scrip codes must start with 5 to be equities (other numeric ranges are
+  // debt, mutual funds, etc.); non-numeric codes aren't part of that numbering scheme so leave them be.
+  const isEquityCode = (scripCd: any) => {
+    const code = String(scripCd);
+    return /^\d+$/.test(code) ? code.startsWith('5') : true;
+  };
 
   const gainersList = (gainers?.Table || []).filter((item: any) => isEquityCode(item.scrip_cd));
   const losersList = ((losers as any)?.Table || []).filter((item: any) => isEquityCode(item.scrip_cd));
