@@ -20,30 +20,17 @@ const BSE_HEADERS = {
 };
 
 
-// Use curl directly for losers - axios and native fetch both get blocked by 
-// BSE anti-bot on Azure VMs, but curl works reliably
-async function fetchBSELoserData(url: string) {
+async function fetchBSEData(url: string) {
   try {
     const { stdout } = await execFileAsync('curl', [
       '-s',
+      '-m', '15',
       '-H', 'accept: application/json',
+      '-H', 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       '-H', 'Referer: https://www.bseindia.com/',
       url
-    ], { maxBuffer: 10 * 1024 * 1024 }); // 10MB buffer to handle large JSON response
+    ], { maxBuffer: 10 * 1024 * 1024 });
     return JSON.parse(stdout);
-  } catch (error: any) {
-    console.error(`BSE Loser Fetch Error (curl):`, error.message);
-    return [];
-  }
-}
-
-async function fetchBSEData(url: string) {
-  try {
-    const response = await axios.get(url, { 
-        headers: BSE_HEADERS,
-        insecureHTTPParser: true 
-    } as any);
-    return response.data;
   } catch (error: any) {
     console.error(`BSE Fetch Error for ${url}:`, error.message);
     return [];
@@ -59,11 +46,10 @@ export async function bseLiveSync() {
   console.log('Fetching gainers from:', gainerUrl);
   console.log('Fetching losers from:', loserUrl);
 
-  // Fetch gainers with axios (works fine)
-  // Fetch losers with curl (axios/fetch both get blocked by BSE anti-bot for losers)
+  // Fetch gainers and losers using curl wrapper
   const gainers = await fetchBSEData(gainerUrl);
   await new Promise(resolve => setTimeout(resolve, 2000));
-  const losers = await fetchBSELoserData(loserUrl);
+  const losers = await fetchBSEData(loserUrl);
 
   // Fully numeric BSE scrip codes must start with 5 to be equities (other numeric ranges are
   // debt, mutual funds, etc.); non-numeric codes aren't part of that numbering scheme so leave them be.
