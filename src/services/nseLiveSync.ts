@@ -55,7 +55,7 @@ export async function nseLiveSync() {
 
     const seen = new Set<string>();
     const values: any[] = [];
-    const recordDate = new Date().toISOString().split('T')[0]; // Using just date to match existing upsert logic
+    const recordDate = new Date().toISOString(); // Using full timestamp for intraday charting
 
     for (const item of allData) {
       // NSE data doesn't provide exact open/high/low in this endpoint.
