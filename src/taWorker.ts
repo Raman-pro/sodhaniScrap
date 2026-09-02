@@ -29,8 +29,15 @@ async function runTAWorker() {
       `, [finId]);
       
       const rows = historyRes.rows;
-      if (rows.length < 14) {
-        // Not enough data for meaningful TA
+      // Every calculate* helper in ./services/ta already returns null on its
+      // own when it doesn't have enough history for its own period (RSI
+      // needs >14 rows, MACD needs 35, SMA200 needs 200, etc.) — so this
+      // isn't gating on the neediest indicator's minimum, only on the bare
+      // minimum for calculatePivotPoints' `prev` day (ohlcv[length - 2]) to
+      // exist at all. A freshly-listed stock with, say, 10 days of history
+      // still gets SMA10/RSI-adjacent levels/pivot points/fibonacci stored;
+      // it just won't have SMA50+/MACD/ADX until it has enough days.
+      if (rows.length < 2) {
         continue;
       }
       
