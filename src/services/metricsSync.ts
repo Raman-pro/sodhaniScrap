@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { pool } from '../db/pool';
+import YahooFinance from 'yahoo-finance2';
+const yahooFinance = new (YahooFinance as any)({ suppressNotices: ['yahooSurvey'] });
 
 // Helper to safely parse numbers from strings like "₹ 1,284" or "7.78 %"
 function parseCleanNumber(val: any): number {
@@ -104,7 +106,7 @@ export async function metricsSync() {
         if (currentPriceJson > 0) {
           sharesOutstanding = mktCapJson / currentPriceJson;
         }
-        const liveMktCap = cmp * sharesOutstanding;
+        let liveMktCap = cmp * sharesOutstanding;
 
         // Extract from profit_loss
         let annualEps = 0;
@@ -167,6 +169,25 @@ export async function metricsSync() {
                 }
               }
             }
+          }
+        }
+
+        if (liveMktCap === 0 || pe === 0) {
+          const yfTicker = nseSymbol !== symbol ? `${nseSymbol}.NS` : `${symbol}.BO`;
+          try {
+            const quote = await yahooFinance.quote(yfTicker);
+            if (liveMktCap === 0 && quote.marketCap) {
+              liveMktCap = quote.marketCap / 10000000;
+            }
+            if (pe === 0 && quote.trailingPE) {
+              pe = quote.trailingPE;
+            }
+            if (divYld === 0 && quote.trailingAnnualDividendYield) {
+              divYld = quote.trailingAnnualDividendYield * 100;
+            }
+            console.log(`Used Yahoo Finance fallback for ${symbol}`);
+          } catch (e: any) {
+            console.log(`Yahoo Finance fallback failed for ${yfTicker}: ${e.message}`);
           }
         }
 
