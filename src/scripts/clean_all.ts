@@ -30,7 +30,7 @@ async function run() {
 
     // BSE Indices
     const { rows: bseRows } = await client.query(`
-      SELECT code, record_time 
+      SELECT sccode, record_time 
       FROM bse_index_history 
       WHERE DATE(record_time) >= CURRENT_DATE - INTERVAL '1 day'
     `);
@@ -39,14 +39,14 @@ async function run() {
       const d = new Date(row.record_time);
       const timeNum = d.getUTCHours() * 100 + d.getUTCMinutes();
       if (timeNum < 345 || timeNum > 1000) {
-        await client.query(`DELETE FROM bse_index_history WHERE code = $1 AND record_time = $2`, [row.code, row.record_time]);
+        await client.query(`DELETE FROM bse_index_history WHERE sccode = $1 AND record_time = $2`, [row.sccode, row.record_time]);
         deletedBse++;
       }
     }
 
     // NSE Indices
     const { rows: nseRows } = await client.query(`
-      SELECT code, record_time 
+      SELECT index_name, record_time 
       FROM nse_index_history 
       WHERE DATE(record_time) >= CURRENT_DATE - INTERVAL '1 day'
     `);
@@ -55,7 +55,7 @@ async function run() {
       const d = new Date(row.record_time);
       const timeNum = d.getUTCHours() * 100 + d.getUTCMinutes();
       if (timeNum < 345 || timeNum > 1000) {
-        await client.query(`DELETE FROM nse_index_history WHERE code = $1 AND record_time = $2`, [row.code, row.record_time]);
+        await client.query(`DELETE FROM nse_index_history WHERE index_name = $1 AND record_time = $2`, [row.index_name, row.record_time]);
         deletedNse++;
       }
     }
