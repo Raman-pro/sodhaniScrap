@@ -99,6 +99,37 @@ export async function metricsSync() {
         const rawData = fs.readFileSync(jsonPath, 'utf8');
         const json = JSON.parse(rawData);
 
+        // Sync company_sectors classification
+        if (json.industry?.industry_code && json.industry?.industry_name) {
+          const codes = json.industry.industry_code.split('/');
+          const names = json.industry.industry_name.split('/');
+          if (codes.length >= 4 && names.length >= 4) {
+            const companyName = json.overview?.company_name || symbol;
+            const sectorCode = codes[0];
+            const industryCode = codes[2];
+            const leafCode = codes[3];
+            const sectorName = names[0];
+            const industryName = names[2];
+            const leafName = names[3];
+            const finInstrmId = finId || symbol;
+
+            await client.query(`
+              INSERT INTO company_sectors (
+                fin_instrm_id, company_name, sector_name, industry_name, leaf_name, 
+                sector_code, industry_code, leaf_code
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              ON CONFLICT (fin_instrm_id) DO UPDATE SET
+                company_name = EXCLUDED.company_name,
+                sector_name = EXCLUDED.sector_name,
+                industry_name = EXCLUDED.industry_name,
+                leaf_name = EXCLUDED.leaf_name,
+                sector_code = EXCLUDED.sector_code,
+                industry_code = EXCLUDED.industry_code,
+                leaf_code = EXCLUDED.leaf_code
+            `, [finInstrmId, companyName, sectorName, industryName, leafName, sectorCode, industryCode, leafCode]);
+          }
+        }
+
         const mktCapJson = parseCleanNumber(json.key_metrics?.["Market Cap"]);
         const currentPriceJson = parseCleanNumber(json.key_metrics?.["Current Price"]);
         const roce = parseCleanNumber(json.key_metrics?.["ROCE"]);
