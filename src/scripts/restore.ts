@@ -1,4 +1,4 @@
-import { pool } from '../db/init';
+import { pool } from '../db/pool';
 import yahooFinance from 'yahoo-finance2';
 
 async function fix() {
