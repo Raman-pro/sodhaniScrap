@@ -21,7 +21,7 @@ async function fix() {
       WHERE DATE(record_time) >= CURRENT_DATE - INTERVAL '1 day'
       AND EXTRACT(HOUR FROM record_time AT TIME ZONE 'UTC') < 3
     `);
-    console.log(`Deleted ${del1.rowCount} garbage stock ticks and ${del2.rowCount + del3.rowCount} garbage index ticks for today.`);
+    console.log(`Deleted ${del1.rowCount || 0} garbage stock ticks and ${(del2.rowCount || 0) + (del3.rowCount || 0)} garbage index ticks for today.`);
 
     // 2. RESTORE accidentally deleted Yahoo data (2000 to 2002)
     console.log('Restoring deleted Yahoo Finance data (2000-03 to 2002-01)...');
