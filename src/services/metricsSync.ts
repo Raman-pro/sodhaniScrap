@@ -56,9 +56,9 @@ export async function metricsSync() {
       SELECT 
         "TckrSymb",
         "FinInstrmId",
-        "LastPric" as close_price
+        COALESCE("LastPric", 0) as close_price
       FROM company_stock
-      WHERE "TckrSymb" IS NOT NULL AND "LastPric" IS NOT NULL
+      WHERE "TckrSymb" IS NOT NULL
     `);
     
     console.log(`Found ${historyResult.rows.length} stocks with historical prices.`);
@@ -72,9 +72,9 @@ export async function metricsSync() {
       const symbol = row.TckrSymb.trim().replace(/\.(NS|BO)$/i, '').toUpperCase();
       const nseSymbol = bseToNse[symbol] || symbol;
       const finId = row.FinInstrmId ? row.FinInstrmId.toString() : '';
-      const cmp = parseFloat(row.close_price);
+      let cmp = parseFloat(row.close_price);
       
-      if (isNaN(cmp)) continue;
+      if (isNaN(cmp)) cmp = 0;
 
       const metricsSymbol = finId || symbol;
 
@@ -174,7 +174,7 @@ export async function metricsSync() {
           }
         }
 
-        if (liveMktCap === 0 || pe === 0) {
+        if (liveMktCap === 0 || pe === 0 || cmp === 0) {
           const yfTicker = nseSymbol !== symbol ? `${nseSymbol}.NS` : `${symbol}.BO`;
           if (symbol === 'SHANKESH') {
              console.log(`[DEBUG SHANKESH] Triggering YF fallback for ${yfTicker}`);
@@ -182,7 +182,10 @@ export async function metricsSync() {
           try {
             const quote = await yahooFinance.quote(yfTicker);
             if (symbol === 'SHANKESH') {
-               console.log(`[DEBUG SHANKESH] YF quote returned marketCap: ${quote.marketCap}, trailingPE: ${quote.trailingPE}`);
+               console.log(`[DEBUG SHANKESH] YF quote returned marketCap: ${quote.marketCap}, trailingPE: ${quote.trailingPE}, regularMarketPrice: ${quote.regularMarketPrice}`);
+            }
+            if (cmp === 0 && quote.regularMarketPrice) {
+              cmp = quote.regularMarketPrice;
             }
             if (liveMktCap === 0 && quote.marketCap) {
               liveMktCap = quote.marketCap / 10000000;
