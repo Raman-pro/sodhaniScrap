@@ -1,8 +1,6 @@
 import { pool } from '../db/pool';
 import YahooFinance from 'yahoo-finance2';
-const yahooFinance = new (YahooFinance as any)({
-  validateResult: false
-});
+const yahooFinance = new (YahooFinance as any)();
 yahooFinance.suppressNotices(['ripHistorical']);
 yahooFinance.setGlobalConfig({
   validation: { logErrors: false }
