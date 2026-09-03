@@ -1,4 +1,4 @@
-import { pool } from '../src/db/init';
+import { pool } from '../db/init';
 import yahooFinance from 'yahoo-finance2';
 
 async function fix() {
@@ -33,14 +33,14 @@ async function fix() {
       const stock = stocks[i];
       const symbol = stock.TckrSymb + '.NS';
       try {
-        const result = await yahooFinance.historical(symbol, {
+        const result: any = await yahooFinance.historical(symbol, {
           period1: '2000-01-01',
           period2: '2002-03-01'
         });
         
         if (!result || result.length === 0) continue;
         
-        const cleanResult = result.filter(r => r.close != null && r.open != null);
+        const cleanResult = result.filter((r: any) => r.close != null && r.open != null);
         if (cleanResult.length === 0) continue;
         
         for (const row of cleanResult) {
