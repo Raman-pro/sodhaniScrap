@@ -45,7 +45,7 @@ async function fix() {
         const result: any = await yahooFinance.historical(symbol, {
           period1: '2000-01-01',
           period2: '2002-03-01'
-        });
+        }, { validateResult: false });
         
         if (!result || result.length === 0) continue;
         
