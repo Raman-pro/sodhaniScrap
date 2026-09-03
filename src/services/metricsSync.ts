@@ -100,11 +100,26 @@ export async function metricsSync() {
         const json = JSON.parse(rawData);
 
         // Sync company_sectors classification
-        if (json.industry?.industry_code && json.industry?.industry_name) {
-          const codes = json.industry.industry_code.split('/');
-          const names = json.industry.industry_name.split('/');
+        let industryData = json.industry;
+        let companyName = json.overview?.company_name || symbol;
+
+        if ((!industryData || !industryData.industry_code) && jsonPath.includes('output_consolidated')) {
+          const standalonePath = jsonPath.replace('output_consolidated', 'output');
+          if (fs.existsSync(standalonePath)) {
+            try {
+              const standaloneJson = JSON.parse(fs.readFileSync(standalonePath, 'utf8'));
+              industryData = standaloneJson.industry;
+              if (standaloneJson.overview?.company_name) {
+                companyName = standaloneJson.overview.company_name;
+              }
+            } catch (e) {}
+          }
+        }
+
+        if (industryData?.industry_code && industryData?.industry_name) {
+          const codes = industryData.industry_code.split('/');
+          const names = industryData.industry_name.split('/');
           if (codes.length >= 4 && names.length >= 4) {
-            const companyName = json.overview?.company_name || symbol;
             const sectorCode = codes[0];
             const industryCode = codes[2];
             const leafCode = codes[3];
