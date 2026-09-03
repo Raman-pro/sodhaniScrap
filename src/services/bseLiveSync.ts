@@ -79,7 +79,7 @@ export async function bseLiveSync() {
   const values: any[] = [];
   
   for (const item of allData) {
-    const recordDate = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
+    const recordDate = item.dt_tm ? new Date(item.dt_tm + " GMT+0530").toISOString() : new Date().toISOString();
     const key = `${item.scrip_cd}_${recordDate}`;
     
     if (!seen.has(key)) {
@@ -133,7 +133,7 @@ export async function bseLiveSync() {
     // Process Gainers (Top 50)
     for (let i = 0; i < Math.min(50, gainersList.length); i++) {
         const item = gainersList[i];
-        const recordTime = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
+        const recordTime = item.dt_tm ? new Date(item.dt_tm + " GMT+0530").toISOString() : new Date().toISOString();
         topGainersLosersValues.push([
             recordTime,
             'gainer',
@@ -150,7 +150,7 @@ export async function bseLiveSync() {
     // Process Losers (Top 50)
     for (let i = 0; i < Math.min(50, losersList.length); i++) {
         const item = losersList[i];
-        const recordTime = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
+        const recordTime = item.dt_tm ? new Date(item.dt_tm + " GMT+0530").toISOString() : new Date().toISOString();
         topGainersLosersValues.push([
             recordTime,
             'loser',

@@ -10,13 +10,19 @@ dotenv.config();
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '300000', 10);
 
 function isMarketOpen() {
-  const istString = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
-  const istDate = new Date(istString);
-  const hours = istDate.getHours();
-  const minutes = istDate.getMinutes();
-  const day = istDate.getDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "numeric",
+    weekday: "short",
+    hour12: false
+  }).formatToParts(new Date());
 
-  if (day === 0 || day === 6) return false;
+  const hours = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+  const minutes = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+  const weekday = parts.find(p => p.type === 'weekday')?.value || '';
+
+  if (weekday === 'Sun' || weekday === 'Sat') return false;
   
   const timeNum = hours * 100 + minutes;
   // 915 to 1530
