@@ -91,10 +91,6 @@ export async function metricsSync() {
                    await findJsonCaseInsensitive(outputDir, finId);
       }
       
-      if (symbol === 'SHANKESH') {
-         console.log(`[DEBUG SHANKESH] jsonPath: ${jsonPath}, cmp: ${cmp}, finId: ${finId}`);
-      }
-
       if (!jsonPath) continue; // No json for this stock
 
       try {
@@ -178,14 +174,8 @@ export async function metricsSync() {
 
         if (liveMktCap === 0 || pe === 0) {
           const yfTicker = nseSymbol !== symbol ? `${nseSymbol}.NS` : `${symbol}.BO`;
-          if (symbol === 'SHANKESH') {
-             console.log(`[DEBUG SHANKESH] Triggering YF fallback for ${yfTicker}`);
-          }
           try {
             const quote = await yahooFinance.quote(yfTicker);
-            if (symbol === 'SHANKESH') {
-               console.log(`[DEBUG SHANKESH] YF quote returned marketCap: ${quote.marketCap}, trailingPE: ${quote.trailingPE}`);
-            }
             if (liveMktCap === 0 && quote.marketCap) {
               liveMktCap = quote.marketCap / 10000000;
             }
