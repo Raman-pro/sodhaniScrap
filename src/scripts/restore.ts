@@ -16,17 +16,17 @@ async function fix() {
     const del1 = await client.query(`
       DELETE FROM historical_prices 
       WHERE DATE(record_date) >= CURRENT_DATE - INTERVAL '1 day'
-      AND (EXTRACT(HOUR FROM record_date AT TIME ZONE 'UTC') < 3 OR EXTRACT(HOUR FROM record_date AT TIME ZONE 'UTC') > 10)
+      AND (CAST(record_date AS TIME) < '03:45:00' OR CAST(record_date AS TIME) > '10:00:00')
     `);
     const del2 = await client.query(`
       DELETE FROM bse_index_history 
       WHERE DATE(record_time) >= CURRENT_DATE - INTERVAL '1 day'
-      AND (EXTRACT(HOUR FROM record_time AT TIME ZONE 'UTC') < 3 OR EXTRACT(HOUR FROM record_time AT TIME ZONE 'UTC') > 10)
+      AND (CAST(record_time AS TIME) < '03:45:00' OR CAST(record_time AS TIME) > '10:00:00')
     `);
     const del3 = await client.query(`
       DELETE FROM nse_index_history 
       WHERE DATE(record_time) >= CURRENT_DATE - INTERVAL '1 day'
-      AND (EXTRACT(HOUR FROM record_time AT TIME ZONE 'UTC') < 3 OR EXTRACT(HOUR FROM record_time AT TIME ZONE 'UTC') > 10)
+      AND (CAST(record_time AS TIME) < '03:45:00' OR CAST(record_time AS TIME) > '10:00:00')
     `);
     console.log(`Deleted ${del1.rowCount || 0} garbage stock ticks and ${(del2.rowCount || 0) + (del3.rowCount || 0)} garbage index ticks for today.`);
 
