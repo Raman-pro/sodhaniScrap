@@ -1,10 +1,12 @@
 import { pool } from '../db/pool';
 import YahooFinance from 'yahoo-finance2';
 const yahooFinance = new (YahooFinance as any)();
-yahooFinance.suppressNotices(['ripHistorical']);
-yahooFinance.setGlobalConfig({
-  validation: { logErrors: false }
-});
+
+// Silence spam
+const originalError = console.error;
+const originalWarn = console.warn;
+console.error = () => {};
+console.warn = () => {};
 
 async function fix() {
   const client = await pool.connect();
