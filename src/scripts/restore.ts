@@ -5,7 +5,7 @@ async function fix() {
   const client = await pool.connect();
   try {
     // 1. DELETE today's garbage intraday ticks without touching historical
-    console.log('Cleaning today\\'s garbage ticks...');
+    console.log("Cleaning today's garbage ticks...");
     const del1 = await client.query(`
       DELETE FROM historical_prices 
       WHERE DATE(record_date) >= CURRENT_DATE - INTERVAL '1 day'
