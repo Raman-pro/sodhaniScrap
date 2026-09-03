@@ -103,14 +103,17 @@ export async function metricsSync() {
         let industryData = json.industry;
         let companyName = json.overview?.company_name || symbol;
 
-        if ((!industryData || !industryData.industry_code) && jsonPath.includes('output_consolidated')) {
+        let standaloneJson: any = null;
+        if (jsonPath.includes('output_consolidated')) {
           const standalonePath = jsonPath.replace('output_consolidated', 'output');
           if (fs.existsSync(standalonePath)) {
             try {
-              const standaloneJson = JSON.parse(fs.readFileSync(standalonePath, 'utf8'));
-              industryData = standaloneJson.industry;
-              if (standaloneJson.overview?.company_name) {
-                companyName = standaloneJson.overview.company_name;
+              standaloneJson = JSON.parse(fs.readFileSync(standalonePath, 'utf8'));
+              if (!industryData || !industryData.industry_code) {
+                industryData = standaloneJson.industry;
+                if (standaloneJson.overview?.company_name) {
+                  companyName = standaloneJson.overview.company_name;
+                }
               }
             } catch (e) {}
           }
@@ -145,9 +148,14 @@ export async function metricsSync() {
           }
         }
 
-        const mktCapJson = parseCleanNumber(json.key_metrics?.["Market Cap"]);
-        const currentPriceJson = parseCleanNumber(json.key_metrics?.["Current Price"]);
+        let mktCapJson = parseCleanNumber(json.key_metrics?.["Market Cap"]);
+        let currentPriceJson = parseCleanNumber(json.key_metrics?.["Current Price"]);
         const roce = parseCleanNumber(json.key_metrics?.["ROCE"]);
+
+        if ((mktCapJson === 0 || currentPriceJson === 0) && standaloneJson) {
+           mktCapJson = parseCleanNumber(standaloneJson.key_metrics?.["Market Cap"]) || mktCapJson;
+           currentPriceJson = parseCleanNumber(standaloneJson.key_metrics?.["Current Price"]) || currentPriceJson;
+        }
 
         // Calculate Shares Outstanding and Live Mkt Cap
         let sharesOutstanding = 0;
@@ -159,19 +167,37 @@ export async function metricsSync() {
         // Extract from profit_loss
         let annualEps = 0;
         let dividendPayout = 0;
-        if (Array.isArray(json.profit_loss)) {
-          const epsRow = json.profit_loss.find((r: any) => r[""] === "EPS in Rs");
-          const divRow = json.profit_loss.find((r: any) => r[""] === "Dividend Payout %");
-          const headerRow = json.profit_loss[0];
-          
-          if (headerRow) {
-            const keys = Object.keys(headerRow).filter(k => k !== "");
-            if (keys.length > 0) {
-              const latestYear = keys[keys.length - 1];
-              if (epsRow) annualEps = parseCleanNumber(epsRow[latestYear]);
-              if (divRow) dividendPayout = parseCleanNumber(divRow[latestYear]);
+
+        const extractEps = (sourceJson: any) => {
+          if (Array.isArray(sourceJson.profit_loss)) {
+            const epsRow = sourceJson.profit_loss.find((r: any) => r[""] === "EPS in Rs");
+            const divRow = sourceJson.profit_loss.find((r: any) => r[""] === "Dividend Payout %");
+            const headerRow = sourceJson.profit_loss[0];
+            
+            if (headerRow) {
+              const keys = Object.keys(headerRow).filter(k => k !== "");
+              if (keys.length > 0) {
+                const latestYear = keys[keys.length - 1];
+                return {
+                  eps: epsRow ? parseCleanNumber(epsRow[latestYear]) : 0,
+                  div: divRow ? parseCleanNumber(divRow[latestYear]) : 0
+                };
+              }
             }
           }
+          return { eps: 0, div: 0 };
+        };
+
+        const consEps = extractEps(json);
+        annualEps = consEps.eps;
+        dividendPayout = consEps.div;
+
+        if (annualEps === 0 && standaloneJson) {
+           const stdEps = extractEps(standaloneJson);
+           if (stdEps.eps > 0) {
+              annualEps = stdEps.eps;
+              dividendPayout = stdEps.div;
+           }
         }
 
         let pe = 0;
