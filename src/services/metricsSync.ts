@@ -51,14 +51,16 @@ export async function metricsSync() {
       console.error('Could not load mappings:', e.message);
     }
 
-    // Get all stocks and their latest price directly from company_stock to avoid querying the massive historical_prices table
+    // Get all stocks that have historical prices
     const historyResult = await client.query(`
-      SELECT 
-        "TckrSymb",
-        "FinInstrmId",
-        "LastPric" as close_price
-      FROM company_stock
-      WHERE "TckrSymb" IS NOT NULL AND "LastPric" IS NOT NULL
+      SELECT DISTINCT ON (hp."FinInstrmId") 
+        cs."TckrSymb",
+        cs."FinInstrmId",
+        hp.close_price
+      FROM historical_prices hp
+      JOIN company_stock cs ON cs."FinInstrmId" = hp."FinInstrmId"
+      WHERE cs."TckrSymb" IS NOT NULL
+      ORDER BY hp."FinInstrmId", hp."record_date" DESC
     `);
     
     console.log(`Found ${historyResult.rows.length} stocks with historical prices.`);
