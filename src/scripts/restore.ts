@@ -1,14 +1,12 @@
 import { pool } from '../db/pool';
 import YahooFinance from 'yahoo-finance2';
 const yahooFinance = new (YahooFinance as any)({
-  suppressNotices: ['ripHistorical']
+  validateResult: false
 });
-yahooFinance._env.logger = {
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-  debug: () => {}
-};
+yahooFinance.suppressNotices(['ripHistorical']);
+yahooFinance.setGlobalConfig({
+  validation: { logErrors: false }
+});
 
 async function fix() {
   const client = await pool.connect();
