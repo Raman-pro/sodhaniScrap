@@ -27,7 +27,7 @@ export async function fetchHistoricalCatchup() {
     const res = await client.query(`
       SELECT c."FinInstrmId", c."TckrSymb", MAX(h."record_date") as last_record
       FROM company_stock c
-      LEFT JOIN historical_prices h ON c."FinInstrmId" = h."FinInstrmId"
+      LEFT JOIN historical_prices h ON c."FinInstrmId" = h."FinInstrmId" AND h.adj_close IS NOT NULL
       GROUP BY c."FinInstrmId", c."TckrSymb"
     `);
 
