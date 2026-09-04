@@ -16,9 +16,10 @@ async function run() {
       const utcHour = d.getUTCHours();
       const utcMin = d.getUTCMinutes();
       const timeNum = utcHour * 100 + utcMin;
+      const isFutureTick = d.getTime() > Date.now();
       
-      // Keep only 03:45 to 10:00 UTC
-      if (timeNum < 345 || timeNum > 1000) {
+      // Keep only 03:45 to 10:00 UTC, and explicitly delete future ticks
+      if (timeNum < 345 || timeNum > 1000 || isFutureTick) {
         await client.query(`
           DELETE FROM historical_prices 
           WHERE "FinInstrmId" = $1 AND record_date = $2
@@ -38,7 +39,8 @@ async function run() {
     for (const row of bseRows) {
       const d = new Date(row.record_time);
       const timeNum = d.getUTCHours() * 100 + d.getUTCMinutes();
-      if (timeNum < 345 || timeNum > 1000) {
+      const isFutureTick = d.getTime() > Date.now();
+      if (timeNum < 345 || timeNum > 1000 || isFutureTick) {
         await client.query(`DELETE FROM bse_index_history WHERE sccode = $1 AND record_time = $2`, [row.sccode, row.record_time]);
         deletedBse++;
       }
@@ -54,7 +56,8 @@ async function run() {
     for (const row of nseRows) {
       const d = new Date(row.record_time);
       const timeNum = d.getUTCHours() * 100 + d.getUTCMinutes();
-      if (timeNum < 345 || timeNum > 1000) {
+      const isFutureTick = d.getTime() > Date.now();
+      if (timeNum < 345 || timeNum > 1000 || isFutureTick) {
         await client.query(`DELETE FROM nse_index_history WHERE symbol = $1 AND record_time = $2`, [row.symbol, row.record_time]);
         deletedNse++;
       }
