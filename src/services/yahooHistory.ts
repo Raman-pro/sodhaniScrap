@@ -43,7 +43,7 @@ export async function fetchHistoricalCatchup() {
         
         const values = cleanResult.map((row: any) => [
           FinInstrmId,
-          row.date.toISOString(), // Preserve full timestamp instead of stripping time
+          row.date.toISOString().split('T')[0], // Strip time so PG inserts it as exactly 00:00:00 local
           row.open, row.high, row.low, row.close, row.adjclose || row.adjClose || null, row.volume
         ]);
 
