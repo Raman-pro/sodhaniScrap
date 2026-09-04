@@ -79,7 +79,20 @@ export async function bseLiveSync() {
   const values: any[] = [];
   
   for (const item of allData) {
-    const recordDate = item.dt_tm ? new Date(item.dt_tm + " GMT+0530").toISOString() : new Date().toISOString();
+    let d: Date;
+    if (item.dt_tm) {
+      d = new Date(item.dt_tm + " GMT+0530");
+      // If the BSE API returned a stale tick from yesterday (e.g. 15:35) without a date,
+      // JS will incorrectly assume it's for today. If it appears to be in the future,
+      // it's actually from yesterday's close. We must safely ignore it.
+      if (d.getTime() > Date.now() + 60000) {
+        continue;
+      }
+    } else {
+      d = new Date();
+    }
+    
+    const recordDate = d.toISOString();
     const key = `${item.scrip_cd}_${recordDate}`;
     
     if (!seen.has(key)) {
