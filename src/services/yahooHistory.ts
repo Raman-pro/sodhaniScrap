@@ -98,7 +98,9 @@ export async function fetchHistoricalCatchup() {
         fetchedRowsCount = result?.length || 0;
         await upsertToDb(result, FinInstrmId);
         console.log(`Upserted ${fetchedRowsCount} rows for ${primarySymbol}`);
-        primarySuccess = true;
+        if (fetchedRowsCount > 0) {
+          primarySuccess = true;
+        }
       } catch (err: any) {
         console.error(`Error fetching for ${primarySymbol}: ${err.message}`);
       }
@@ -113,7 +115,7 @@ export async function fetchHistoricalCatchup() {
              fetchedRowsCount = fallbackResult?.length || 0;
              await upsertToDb(fallbackResult, FinInstrmId);
              console.log(`Upserted ${fetchedRowsCount} rows for ${fallbackSymbol}`);
-             if (fetchedRowsCount >= 20) {
+             if (fetchedRowsCount > 0) {
                primarySuccess = true;
              }
            } catch (fallbackErr: any) {
@@ -130,7 +132,7 @@ export async function fetchHistoricalCatchup() {
             fetchedRowsCount = nseResult?.length || 0;
             await upsertToDb(nseResult, FinInstrmId);
             console.log(`Upserted ${fetchedRowsCount} rows for ${nseSymbol}`);
-            if (fetchedRowsCount >= 20) {
+            if (fetchedRowsCount > 0) {
               primarySuccess = true;
             }
           } catch (nseErr: any) {
