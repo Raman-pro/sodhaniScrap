@@ -85,7 +85,7 @@ export async function fetchHistoricalCatchup() {
       }
       
       const attemptFetch = async (symbol: string) => {
-        const result = await yahooFinance.chart(symbol, { period1, period2 });
+        const result = await yahooFinance.chart(symbol, { period1, period2 }, { validateResult: false });
         return result.quotes || [];
       };
 
