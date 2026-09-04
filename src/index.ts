@@ -25,8 +25,8 @@ function isMarketOpen() {
   if (weekday === 'Sun' || weekday === 'Sat') return false;
   
   const timeNum = hours * 100 + minutes;
-  // 915 to 1530
-  return timeNum >= 915 && timeNum <= 1530;
+  // 900 to 1545
+  return timeNum >= 900 && timeNum <= 1545;
 }
 
 async function startLivePolling() {

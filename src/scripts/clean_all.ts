@@ -5,10 +5,10 @@ async function run() {
   try {
     console.log('Fetching all today ticks from historical_prices...');
     
-    // 1. Delete ticks outside 03:45 to 10:00 UTC, BUT protect exactly 00:00 (Yahoo EOD ticks)
+    // 1. Delete ticks outside 03:30 to 10:15 UTC, BUT protect exactly 00:00 (Yahoo EOD ticks)
     const res1 = await client.query(`
       DELETE FROM historical_prices 
-      WHERE (EXTRACT(HOUR FROM record_date) * 100 + EXTRACT(MINUTE FROM record_date) NOT BETWEEN 345 AND 1000)
+      WHERE (EXTRACT(HOUR FROM record_date) * 100 + EXTRACT(MINUTE FROM record_date) NOT BETWEEN 330 AND 1015)
         AND (EXTRACT(HOUR FROM record_date) * 100 + EXTRACT(MINUTE FROM record_date) != 0)
     `);
     
@@ -24,7 +24,7 @@ async function run() {
     // BSE Indices
     const resBse1 = await client.query(`
       DELETE FROM bse_index_history 
-      WHERE (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) NOT BETWEEN 345 AND 1000)
+      WHERE (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) NOT BETWEEN 330 AND 1015)
         AND (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) != 0)
     `);
     const resBse2 = await client.query(`
@@ -36,7 +36,7 @@ async function run() {
     // NSE Indices
     const resNse1 = await client.query(`
       DELETE FROM nse_index_history 
-      WHERE (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) NOT BETWEEN 345 AND 1000)
+      WHERE (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) NOT BETWEEN 330 AND 1015)
         AND (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) != 0)
     `);
     const resNse2 = await client.query(`
