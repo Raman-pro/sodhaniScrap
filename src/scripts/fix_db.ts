@@ -15,13 +15,16 @@ async function fixDb() {
     for (let i = 0; i < companies.length; i++) {
       const c = companies[i];
       
-      // Step 1: Copy the rich Yahoo data (09:15) into the exact 00:00 slot.
-      // If a placeholder tick (CSV) is already sitting at 00:00, the ON CONFLICT securely overwrites it with the rich data!
+      // Step 1: Securely copy the rich Yahoo data down to 00:00:00.
+      // Using DISTINCT ON prevents the "cannot affect row a second time" error 
+      // if multiple broken ticks accidentally accumulated on the exact same date!
       const insertRes = await client.query(`
         INSERT INTO historical_prices ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, adj_close, volume)
-        SELECT "FinInstrmId", DATE(record_date), open_price, high_price, low_price, close_price, adj_close, volume
+        SELECT DISTINCT ON ("FinInstrmId", DATE(record_date))
+               "FinInstrmId", DATE(record_date), open_price, high_price, low_price, close_price, adj_close, volume
         FROM historical_prices
         WHERE "FinInstrmId" = $1 AND adj_close IS NOT NULL AND record_date != DATE(record_date)
+        ORDER BY "FinInstrmId", DATE(record_date), record_date DESC
         ON CONFLICT ("FinInstrmId", record_date)
         DO UPDATE SET
           open_price = EXCLUDED.open_price,
@@ -32,7 +35,7 @@ async function fixDb() {
           volume = EXCLUDED.volume
       `, [c.FinInstrmId]);
 
-      // Step 2: Now that the rich Yahoo data is safely secured at 00:00, we delete the orphaned 09:15 ticks!
+      // Step 2: Now that the rich Yahoo data is safely secured at 00:00, we delete ALL orphaned non-midnight ticks!
       if ((insertRes.rowCount || 0) > 0) {
         await client.query(`
           DELETE FROM historical_prices 
