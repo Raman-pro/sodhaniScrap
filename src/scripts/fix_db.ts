@@ -1,1 +1,7 @@
-﻿import { pool } from '../db/pool'; pool.query(\UPDATE historical_prices SET record_date = DATE(record_date) WHERE adj_close IS NOT NULL\).then(res => { console.log('Fixed', res.rowCount, 'Yahoo EOD ticks'); pool.end(); }).catch(console.error);
+import { pool } from '../db/pool';
+pool.query(`UPDATE historical_prices SET record_date = DATE(record_date) WHERE adj_close IS NOT NULL`)
+  .then(res => { 
+    console.log('Fixed', res.rowCount, 'Yahoo EOD ticks'); 
+    pool.end(); 
+  })
+  .catch(console.error);
