@@ -19,7 +19,7 @@ async function run() {
         AND (EXTRACT(HOUR FROM record_date) * 60 + EXTRACT(MINUTE FROM record_date)) > (EXTRACT(HOUR FROM CURRENT_TIMESTAMP AT TIME ZONE 'UTC') * 60 + EXTRACT(MINUTE FROM CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))
     `);
     
-    console.log(`Deleted ${res1.rowCount + res2.rowCount} bad stock ticks based on exact native SQL parsing.`);
+    console.log(`Deleted ${(res1.rowCount||0) + (res2.rowCount||0)} bad stock ticks based on exact native SQL parsing.`);
 
     // BSE Indices
     const resBse1 = await client.query(`
