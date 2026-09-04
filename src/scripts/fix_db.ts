@@ -3,64 +3,48 @@ import { pool } from '../db/pool';
 async function fixDb() {
   const client = await pool.connect();
   try {
-    console.log('Fetching broken Yahoo ticks to process...');
+    console.log('Fetching list of companies...');
     
-    // Step 1: Find all Yahoo EOD ticks that are wrongly timed
-    const res = await client.query(`
-      SELECT "FinInstrmId", 
-             record_date as wrong_date, 
-             DATE(record_date) as target_date
-      FROM historical_prices
-      WHERE adj_close IS NOT NULL 
-        AND record_date != DATE(record_date)
-    `);
+    // Fetch just the 6,000 company IDs (virtually zero memory)
+    const res = await client.query('SELECT "FinInstrmId", "TckrSymb" FROM company_stock');
+    const companies = res.rows;
+    
+    console.log(`Found ${companies.length} companies. Processing one by one to use zero memory...`);
 
-    const rows = res.rows;
-    console.log(`Found ${rows.length} Yahoo EOD ticks to fix. processing in batches...`);
+    let totalDeleted = 0;
+    let totalUpdated = 0;
 
-    if (rows.length === 0) {
-      console.log('Nothing to fix!');
-      return;
-    }
-
-    let deleted = 0;
-    let updated = 0;
-
-    // Process in batches of 100 to avoid locking the database or hitting memory limits
-    const BATCH_SIZE = 100;
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < companies.length; i++) {
+      const c = companies[i];
       
-      // 1. Delete the 00:00:00 collision targets for this batch
-      const deleteConditions = batch.map(r => 
-        `("FinInstrmId" = '${r.FinInstrmId}' AND record_date = '${r.target_date.toISOString()}')`
-      ).join(' OR ');
-      
+      // 1. Delete collisions for THIS specific stock (extremely fast, operates on < 3000 rows)
       const delRes = await client.query(`
-        DELETE FROM historical_prices 
-        WHERE ${deleteConditions}
-      `);
-      deleted += delRes.rowCount || 0;
+        DELETE FROM historical_prices hp1
+        USING (
+          SELECT "FinInstrmId", DATE(record_date) as target_date
+          FROM historical_prices
+          WHERE "FinInstrmId" = $1 AND adj_close IS NOT NULL AND record_date != DATE(record_date)
+        ) hp2
+        WHERE hp1."FinInstrmId" = hp2."FinInstrmId"
+          AND hp1.record_date = hp2.target_date
+      `, [c.FinInstrmId]);
+      totalDeleted += delRes.rowCount || 0;
 
-      // 2. Update the wrongly timed Yahoo ticks to 00:00:00 for this batch
-      const updateConditions = batch.map(r => 
-        `("FinInstrmId" = '${r.FinInstrmId}' AND record_date = '${r.wrong_date.toISOString()}')`
-      ).join(' OR ');
-
+      // 2. Update THIS specific stock
       const updRes = await client.query(`
         UPDATE historical_prices 
         SET record_date = DATE(record_date)
-        WHERE ${updateConditions}
-      `);
-      updated += updRes.rowCount || 0;
+        WHERE "FinInstrmId" = $1 AND adj_close IS NOT NULL AND record_date != DATE(record_date)
+      `, [c.FinInstrmId]);
+      totalUpdated += updRes.rowCount || 0;
 
       // Print progress
-      if ((i + BATCH_SIZE) % 500 === 0 || i + BATCH_SIZE >= rows.length) {
-        console.log(`Progress: processed ${Math.min(i + BATCH_SIZE, rows.length)} / ${rows.length} ...`);
+      if ((i + 1) % 500 === 0 || i + 1 === companies.length) {
+        console.log(`Progress: Processed ${i + 1} / ${companies.length} companies...`);
       }
     }
 
-    console.log(`\nDone! Deleted ${deleted} placeholder ticks and Fixed ${updated} Yahoo EOD ticks.`);
+    console.log(`\nDone! Deleted ${totalDeleted} placeholder ticks and Fixed ${totalUpdated} Yahoo EOD ticks.`);
     
   } catch (err) {
     console.error(err);
