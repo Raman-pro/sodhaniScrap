@@ -4,66 +4,48 @@ async function run() {
   const client = await pool.connect();
   try {
     console.log('Fetching all today ticks from historical_prices...');
-    const { rows } = await client.query(`
-      SELECT "FinInstrmId", record_date 
-      FROM historical_prices 
-      WHERE DATE(record_date) >= CURRENT_DATE - INTERVAL '1 day'
-    `);
     
-    let deletedStocks = 0;
-    for (const row of rows) {
-      const d = new Date(row.record_date);
-      const utcHour = d.getUTCHours();
-      const utcMin = d.getUTCMinutes();
-      const timeNum = utcHour * 100 + utcMin;
-      const isFutureTick = d.getTime() > Date.now();
-      
-      // Keep only 03:45 to 10:00 UTC, and explicitly delete future ticks
-      if (timeNum < 345 || timeNum > 1000 || isFutureTick) {
-        await client.query(`
-          DELETE FROM historical_prices 
-          WHERE "FinInstrmId" = $1 AND record_date = $2
-        `, [row.FinInstrmId, row.record_date]);
-        deletedStocks++;
-      }
-    }
-    console.log(`Deleted ${deletedStocks} bad stock ticks based on exact Node UTC parsing.`);
+    // 1. Delete ticks outside 03:45 to 10:00 UTC, BUT protect exactly 00:00 (Yahoo EOD ticks)
+    const res1 = await client.query(\
+      DELETE FROM historical_prices 
+      WHERE (EXTRACT(HOUR FROM record_date) * 100 + EXTRACT(MINUTE FROM record_date) NOT BETWEEN 345 AND 1000)
+        AND (EXTRACT(HOUR FROM record_date) * 100 + EXTRACT(MINUTE FROM record_date) != 0)
+    \);
+    
+    // 2. Delete ticks that are in the physical future relative to the current actual UTC time
+    const res2 = await client.query(\
+      DELETE FROM historical_prices 
+      WHERE DATE(record_date) = CURRENT_DATE 
+        AND (EXTRACT(HOUR FROM record_date) * 60 + EXTRACT(MINUTE FROM record_date)) > (EXTRACT(HOUR FROM CURRENT_TIMESTAMP AT TIME ZONE 'UTC') * 60 + EXTRACT(MINUTE FROM CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))
+    \);
+    
+    console.log(\Deleted \ bad stock ticks based on exact native SQL parsing.\);
 
     // BSE Indices
-    const { rows: bseRows } = await client.query(`
-      SELECT sccode, record_time 
-      FROM bse_index_history 
-      WHERE DATE(record_time) >= CURRENT_DATE - INTERVAL '1 day'
-    `);
-    let deletedBse = 0;
-    for (const row of bseRows) {
-      const d = new Date(row.record_time);
-      const timeNum = d.getUTCHours() * 100 + d.getUTCMinutes();
-      const isFutureTick = d.getTime() > Date.now();
-      if (timeNum < 345 || timeNum > 1000 || isFutureTick) {
-        await client.query(`DELETE FROM bse_index_history WHERE sccode = $1 AND record_time = $2`, [row.sccode, row.record_time]);
-        deletedBse++;
-      }
-    }
+    const resBse1 = await client.query(\
+      DELETE FROM bse_index_history 
+      WHERE (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) NOT BETWEEN 345 AND 1000)
+        AND (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) != 0)
+    \);
+    const resBse2 = await client.query(\
+      DELETE FROM bse_index_history 
+      WHERE DATE(record_time) = CURRENT_DATE 
+        AND (EXTRACT(HOUR FROM record_time) * 60 + EXTRACT(MINUTE FROM record_time)) > (EXTRACT(HOUR FROM CURRENT_TIMESTAMP AT TIME ZONE 'UTC') * 60 + EXTRACT(MINUTE FROM CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))
+    \);
 
     // NSE Indices
-    const { rows: nseRows } = await client.query(`
-      SELECT symbol, record_time 
-      FROM nse_index_history 
-      WHERE DATE(record_time) >= CURRENT_DATE - INTERVAL '1 day'
-    `);
-    let deletedNse = 0;
-    for (const row of nseRows) {
-      const d = new Date(row.record_time);
-      const timeNum = d.getUTCHours() * 100 + d.getUTCMinutes();
-      const isFutureTick = d.getTime() > Date.now();
-      if (timeNum < 345 || timeNum > 1000 || isFutureTick) {
-        await client.query(`DELETE FROM nse_index_history WHERE symbol = $1 AND record_time = $2`, [row.symbol, row.record_time]);
-        deletedNse++;
-      }
-    }
+    const resNse1 = await client.query(\
+      DELETE FROM nse_index_history 
+      WHERE (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) NOT BETWEEN 345 AND 1000)
+        AND (EXTRACT(HOUR FROM record_time) * 100 + EXTRACT(MINUTE FROM record_time) != 0)
+    \);
+    const resNse2 = await client.query(\
+      DELETE FROM nse_index_history 
+      WHERE DATE(record_time) = CURRENT_DATE 
+        AND (EXTRACT(HOUR FROM record_time) * 60 + EXTRACT(MINUTE FROM record_time)) > (EXTRACT(HOUR FROM CURRENT_TIMESTAMP AT TIME ZONE 'UTC') * 60 + EXTRACT(MINUTE FROM CURRENT_TIMESTAMP AT TIME ZONE 'UTC'))
+    \);
     
-    console.log(`Deleted ${deletedBse + deletedNse} bad index ticks.`);
+    console.log(\Deleted \ bad index ticks.\);
   } catch (err) {
     console.error(err);
   } finally {

@@ -81,7 +81,7 @@ export async function bseLiveSync() {
   for (const item of allData) {
     let d: Date;
     if (item.dt_tm) {
-      d = new Date(item.dt_tm + " GMT+0530");
+      d = new Date(item.dt_tm.replace('T', ' ') + " GMT+0530");
       // If the BSE API returned a stale tick from yesterday (e.g. 15:35) without a date,
       // JS will incorrectly assume it's for today. If it appears to be in the future,
       // it's actually from yesterday's close. We must safely ignore it.
