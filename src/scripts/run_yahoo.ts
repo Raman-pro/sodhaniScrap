@@ -1,0 +1,1 @@
+﻿import { fetchHistoricalCatchup } from '../services/yahooHistory'; fetchHistoricalCatchup().then(() => process.exit(0)).catch(console.error);

@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { pool } from '../db/pool';
+import YahooFinance from 'yahoo-finance2';
+const yahooFinance = new (YahooFinance as any)({ suppressNotices: ['yahooSurvey'] });
 
 // Helper to safely parse numbers from strings like "₹ 1,284" or "7.78 %"
 function parseCleanNumber(val: any): number {
@@ -49,16 +51,19 @@ export async function metricsSync() {
       console.error('Could not load mappings:', e.message);
     }
 
-    // Get all stocks that have historical prices
+    // Get all stocks and their latest close price from historical_prices (kept
+    // fresh by the live/EOD sync jobs) rather than company_stock.LastPric,
+    // which is only ever populated from the bhavcopy CSV import and silently
+    // goes stale for any symbol that import stops covering.
     const historyResult = await client.query(`
-      SELECT DISTINCT ON (hp."FinInstrmId") 
+      SELECT DISTINCT ON (cs."FinInstrmId")
         cs."TckrSymb",
         cs."FinInstrmId",
-        hp.close_price
-      FROM historical_prices hp
-      JOIN company_stock cs ON cs."FinInstrmId" = hp."FinInstrmId"
+        COALESCE(hp.close_price, 0) as close_price
+      FROM company_stock cs
+      LEFT JOIN historical_prices hp ON hp."FinInstrmId" = cs."FinInstrmId"
       WHERE cs."TckrSymb" IS NOT NULL
-      ORDER BY hp."FinInstrmId", hp."record_date" DESC
+      ORDER BY cs."FinInstrmId", hp.record_date DESC
     `);
     
     console.log(`Found ${historyResult.rows.length} stocks with historical prices.`);
@@ -72,57 +77,106 @@ export async function metricsSync() {
       const symbol = row.TckrSymb.trim().replace(/\.(NS|BO)$/i, '').toUpperCase();
       const nseSymbol = bseToNse[symbol] || symbol;
       const finId = row.FinInstrmId ? row.FinInstrmId.toString() : '';
-      const cmp = parseFloat(row.close_price);
+      let cmp = parseFloat(row.close_price);
       
-      if (isNaN(cmp)) continue;
+      if (isNaN(cmp)) cmp = 0;
 
       const metricsSymbol = finId || symbol;
 
-      // Try NSE symbol first, then BSE TckrSymb, then the numerical BSE Scrip Code (FinInstrmId)
-      let jsonPath = await findJsonCaseInsensitive(outputConsolidated, nseSymbol) ||
-                     await findJsonCaseInsensitive(outputDir, nseSymbol) ||
-                     await findJsonCaseInsensitive(outputConsolidated, symbol) ||
-                     await findJsonCaseInsensitive(outputDir, symbol);
-                     
-      if (!jsonPath && finId) {
-        jsonPath = await findJsonCaseInsensitive(outputConsolidated, finId) ||
-                   await findJsonCaseInsensitive(outputDir, finId);
-      }
+      // Find Standalone and Consolidated paths independently
+      let stdPath = await findJsonCaseInsensitive(outputDir, nseSymbol) || await findJsonCaseInsensitive(outputDir, symbol);
+      if (!stdPath && finId) stdPath = await findJsonCaseInsensitive(outputDir, finId);
       
-      if (!jsonPath) continue; // No json for this stock
+      let consPath = await findJsonCaseInsensitive(outputConsolidated, nseSymbol) || await findJsonCaseInsensitive(outputConsolidated, symbol);
+      if (!consPath && finId) consPath = await findJsonCaseInsensitive(outputConsolidated, finId);
+
+      if (!stdPath && !consPath) continue; // No json for this stock
+
+      if (symbol === 'SHANKESH') {
+         console.log(`[DEBUG SHANKESH] stdPath: ${stdPath}, consPath: ${consPath}, cmp: ${cmp}, finId: ${finId}`);
+      }
 
       try {
-        const rawData = fs.readFileSync(jsonPath, 'utf8');
-        const json = JSON.parse(rawData);
+        let stdJson: any = null;
+        let consJson: any = null;
+        
+        if (stdPath) {
+          try { stdJson = JSON.parse(fs.readFileSync(stdPath, 'utf8')); } catch (e) {}
+        }
+        if (consPath) {
+          try { consJson = JSON.parse(fs.readFileSync(consPath, 'utf8')); } catch (e) {}
+        }
 
-        const mktCapJson = parseCleanNumber(json.key_metrics?.["Market Cap"]);
-        const currentPriceJson = parseCleanNumber(json.key_metrics?.["Current Price"]);
-        const roce = parseCleanNumber(json.key_metrics?.["ROCE"]);
+        // Industry categorization fallback (Standalone > Consolidated)
+        let industryData = stdJson?.industry || consJson?.industry;
+        let companyName = stdJson?.overview?.company_name || consJson?.overview?.company_name || symbol;
+
+        if (industryData?.industry_code && industryData?.industry_name) {
+          const codes = industryData.industry_code.split('/');
+          const names = industryData.industry_name.split('/');
+          if (codes.length >= 4 && names.length >= 4) {
+            const sectorCode = codes[0];
+            const industryCode = codes[2];
+            const leafCode = codes[3];
+            const sectorName = names[0];
+            const industryName = names[2];
+            const leafName = names[3];
+            const finInstrmId = finId || symbol;
+
+            await client.query(`
+              INSERT INTO company_sectors (
+                fin_instrm_id, company_name, sector_name, industry_name, leaf_name, 
+                sector_code, industry_code, leaf_code
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              ON CONFLICT (fin_instrm_id) DO UPDATE SET
+                company_name = EXCLUDED.company_name,
+                sector_name = EXCLUDED.sector_name,
+                industry_name = EXCLUDED.industry_name,
+                leaf_name = EXCLUDED.leaf_name,
+                sector_code = EXCLUDED.sector_code,
+                industry_code = EXCLUDED.industry_code,
+                leaf_code = EXCLUDED.leaf_code
+            `, [finInstrmId, companyName, sectorName, industryName, leafName, sectorCode, industryCode, leafCode]);
+          }
+        }
+
+        // Metrics Fallback (Standalone > Consolidated)
+        let mktCapJson = parseCleanNumber(stdJson?.key_metrics?.["Market Cap"]) || parseCleanNumber(consJson?.key_metrics?.["Market Cap"]) || 0;
+        let currentPriceJson = parseCleanNumber(stdJson?.key_metrics?.["Current Price"]) || parseCleanNumber(consJson?.key_metrics?.["Current Price"]) || 0;
+        let roce = parseCleanNumber(stdJson?.key_metrics?.["ROCE"]) || parseCleanNumber(consJson?.key_metrics?.["ROCE"]) || 0;
 
         // Calculate Shares Outstanding and Live Mkt Cap
         let sharesOutstanding = 0;
         if (currentPriceJson > 0) {
           sharesOutstanding = mktCapJson / currentPriceJson;
         }
-        const liveMktCap = cmp * sharesOutstanding;
+        let liveMktCap = cmp * sharesOutstanding;
 
-        // Extract from profit_loss
-        let annualEps = 0;
-        let dividendPayout = 0;
-        if (Array.isArray(json.profit_loss)) {
-          const epsRow = json.profit_loss.find((r: any) => r[""] === "EPS in Rs");
-          const divRow = json.profit_loss.find((r: any) => r[""] === "Dividend Payout %");
-          const headerRow = json.profit_loss[0];
+        // Extract EPS and Dividend (Standalone > Consolidated)
+        const extractEps = (sourceJson: any) => {
+          if (!sourceJson || !Array.isArray(sourceJson.profit_loss)) return { eps: 0, div: 0 };
+          const epsRow = sourceJson.profit_loss.find((r: any) => r[""] === "EPS in Rs");
+          const divRow = sourceJson.profit_loss.find((r: any) => r[""] === "Dividend Payout %");
+          const headerRow = sourceJson.profit_loss[0];
           
           if (headerRow) {
             const keys = Object.keys(headerRow).filter(k => k !== "");
             if (keys.length > 0) {
               const latestYear = keys[keys.length - 1];
-              if (epsRow) annualEps = parseCleanNumber(epsRow[latestYear]);
-              if (divRow) dividendPayout = parseCleanNumber(divRow[latestYear]);
+              return {
+                eps: epsRow ? parseCleanNumber(epsRow[latestYear]) : 0,
+                div: divRow ? parseCleanNumber(divRow[latestYear]) : 0
+              };
             }
           }
-        }
+          return { eps: 0, div: 0 };
+        };
+
+        const stdEps = extractEps(stdJson);
+        const consEps = extractEps(consJson);
+        
+        let annualEps = stdEps.eps > 0 ? stdEps.eps : consEps.eps;
+        let dividendPayout = stdEps.eps > 0 ? stdEps.div : (consEps.eps > 0 ? consEps.div : 0);
 
         let pe = 0;
         if (annualEps > 0) {
@@ -135,38 +189,70 @@ export async function metricsSync() {
           divYld = (annualDividendPerShare / cmp) * 100;
         }
 
-        // Extract from quarterly
-        let npQtr = 0;
-        let profitVar = 0;
-        let salesQtr = 0;
-        let salesVar = 0;
-
-        if (Array.isArray(json.quarterly)) {
-          const netProfitRow = json.quarterly.find((r: any) => r[""] === "Net Profit");
-          const salesRow = json.quarterly.find((r: any) => r[""] === "Sales");
-          const headerRow = json.quarterly[0];
+        // Extract Quarterly (Standalone > Consolidated)
+        const extractQuarterly = (sourceJson: any) => {
+          let q = { np: 0, pv: 0, sq: 0, sv: 0 };
+          if (!sourceJson || !Array.isArray(sourceJson.quarterly)) return q;
+          const netProfitRow = sourceJson.quarterly.find((r: any) => r[""] === "Net Profit");
+          const salesRow = sourceJson.quarterly.find((r: any) => r[""] === "Sales");
+          const headerRow = sourceJson.quarterly[0];
           
           if (headerRow) {
             const keys = Object.keys(headerRow).filter(k => k !== "");
             if (keys.length > 0) {
               const latestQtr = keys[keys.length - 1];
-              
               if (netProfitRow) {
-                npQtr = parseCleanNumber(netProfitRow[latestQtr]);
+                q.np = parseCleanNumber(netProfitRow[latestQtr]);
                 if (Array.isArray(netProfitRow.children)) {
                    const profitVarRow = netProfitRow.children.find((r: any) => r[""] === "YOY Profit Growth %");
-                   if (profitVarRow) profitVar = parseCleanNumber(profitVarRow[latestQtr]);
+                   if (profitVarRow) q.pv = parseCleanNumber(profitVarRow[latestQtr]);
                 }
               }
-
               if (salesRow) {
-                salesQtr = parseCleanNumber(salesRow[latestQtr]);
+                q.sq = parseCleanNumber(salesRow[latestQtr]);
                 if (Array.isArray(salesRow.children)) {
                    const salesVarRow = salesRow.children.find((r: any) => r[""] === "YOY Sales Growth %");
-                   if (salesVarRow) salesVar = parseCleanNumber(salesVarRow[latestQtr]);
+                   if (salesVarRow) q.sv = parseCleanNumber(salesVarRow[latestQtr]);
                 }
               }
             }
+          }
+          return q;
+        };
+
+        const stdQtr = extractQuarterly(stdJson);
+        const consQtr = extractQuarterly(consJson);
+
+        let npQtr = stdQtr.np !== 0 ? stdQtr.np : consQtr.np;
+        let profitVar = stdQtr.np !== 0 ? stdQtr.pv : consQtr.pv;
+        let salesQtr = stdQtr.sq !== 0 ? stdQtr.sq : consQtr.sq;
+        let salesVar = stdQtr.sq !== 0 ? stdQtr.sv : consQtr.sv;
+
+        if (liveMktCap === 0 || pe === 0 || cmp === 0) {
+          const yfTicker = nseSymbol !== symbol ? `${nseSymbol}.NS` : `${symbol}.BO`;
+          if (symbol === 'SHANKESH') {
+             console.log(`[DEBUG SHANKESH] Triggering YF fallback for ${yfTicker}`);
+          }
+          try {
+            const quote = await yahooFinance.quote(yfTicker);
+            if (symbol === 'SHANKESH') {
+               console.log(`[DEBUG SHANKESH] YF quote returned marketCap: ${quote.marketCap}, trailingPE: ${quote.trailingPE}, regularMarketPrice: ${quote.regularMarketPrice}`);
+            }
+            if (cmp === 0 && quote.regularMarketPrice) {
+              cmp = quote.regularMarketPrice;
+            }
+            if (liveMktCap === 0 && quote.marketCap) {
+              liveMktCap = quote.marketCap / 10000000;
+            }
+            if (pe === 0 && quote.trailingPE) {
+              pe = quote.trailingPE;
+            }
+            if (divYld === 0 && quote.trailingAnnualDividendYield) {
+              divYld = quote.trailingAnnualDividendYield * 100;
+            }
+            console.log(`Used Yahoo Finance fallback for ${symbol}`);
+          } catch (e: any) {
+            console.log(`Yahoo Finance fallback failed for ${yfTicker}: ${e.message}`);
           }
         }
 

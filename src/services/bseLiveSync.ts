@@ -21,30 +21,17 @@ const BSE_HEADERS = {
 };
 
 
-// Use curl directly for losers - axios and native fetch both get blocked by 
-// BSE anti-bot on Azure VMs, but curl works reliably
-async function fetchBSELoserData(url: string) {
+async function fetchBSEData(url: string) {
   try {
     const { stdout } = await execFileAsync('curl', [
       '-s',
+      '-m', '15',
       '-H', 'accept: application/json',
+      '-H', 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       '-H', 'Referer: https://www.bseindia.com/',
       url
-    ], { maxBuffer: 10 * 1024 * 1024 }); // 10MB buffer to handle large JSON response
+    ], { maxBuffer: 10 * 1024 * 1024 });
     return JSON.parse(stdout);
-  } catch (error: any) {
-    console.error(`BSE Loser Fetch Error (curl):`, error.message);
-    return [];
-  }
-}
-
-async function fetchBSEData(url: string) {
-  try {
-    const response = await axios.get(url, { 
-        headers: BSE_HEADERS,
-        insecureHTTPParser: true 
-    } as any);
-    return response.data;
   } catch (error: any) {
     console.error(`BSE Fetch Error for ${url}:`, error.message);
     return [];
@@ -60,14 +47,20 @@ export async function bseLiveSync() {
   console.log('Fetching gainers from:', gainerUrl);
   console.log('Fetching losers from:', loserUrl);
 
-  // Fetch gainers with axios (works fine)
-  // Fetch losers with curl (axios/fetch both get blocked by BSE anti-bot for losers)
+  // Fetch gainers and losers using curl wrapper
   const gainers = await fetchBSEData(gainerUrl);
   await new Promise(resolve => setTimeout(resolve, 2000));
-  const losers = await fetchBSELoserData(loserUrl);
+  const losers = await fetchBSEData(loserUrl);
 
-  const gainersList = gainers?.Table || [];
-  const losersList = (losers as any)?.Table || [];
+  // Fully numeric BSE scrip codes must start with 5 to be equities (other numeric ranges are
+  // debt, mutual funds, etc.); non-numeric codes aren't part of that numbering scheme so leave them be.
+  const isEquityCode = (scripCd: any) => {
+    const code = String(scripCd);
+    return /^\d+$/.test(code) ? code.startsWith('5') : true;
+  };
+
+  const gainersList = (gainers?.Table || []).filter((item: any) => isEquityCode(item.scrip_cd));
+  const losersList = ((losers as any)?.Table || []).filter((item: any) => isEquityCode(item.scrip_cd));
   console.log(`Fetched ${gainersList.length} gainers, ${losersList.length} losers from BSE.`);
   if (gainersList.length > 0) {
     console.log(`Top gainer: ${gainersList[0].scripname} change_percent=${gainersList[0].change_percent}`);
@@ -87,7 +80,20 @@ export async function bseLiveSync() {
   const values: any[] = [];
   
   for (const item of allData) {
-    const recordDate = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
+    let d: Date;
+    if (item.dt_tm) {
+      d = new Date(item.dt_tm.replace('T', ' ') + " GMT+0530");
+      // If the BSE API returned a stale tick from yesterday (e.g. 15:35) without a date,
+      // JS will incorrectly assume it's for today. If it appears to be in the future,
+      // it's actually from yesterday's close. We must safely ignore it.
+      if (d.getTime() > Date.now() + 60000) {
+        continue;
+      }
+    } else {
+      d = new Date();
+    }
+    
+    const recordDate = d.toISOString();
     const key = `${item.scrip_cd}_${recordDate}`;
     
     if (!seen.has(key)) {
@@ -157,7 +163,7 @@ export async function bseLiveSync() {
     // Process Gainers (Top 50)
     for (let i = 0; i < Math.min(50, gainersList.length); i++) {
         const item = gainersList[i];
-        const recordTime = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
+        const recordTime = item.dt_tm ? new Date(item.dt_tm + " GMT+0530").toISOString() : new Date().toISOString();
         topGainersLosersValues.push([
             recordTime,
             'gainer',
@@ -174,7 +180,7 @@ export async function bseLiveSync() {
     // Process Losers (Top 50)
     for (let i = 0; i < Math.min(50, losersList.length); i++) {
         const item = losersList[i];
-        const recordTime = item.dt_tm ? new Date(item.dt_tm).toISOString() : new Date().toISOString();
+        const recordTime = item.dt_tm ? new Date(item.dt_tm + " GMT+0530").toISOString() : new Date().toISOString();
         topGainersLosersValues.push([
             recordTime,
             'loser',

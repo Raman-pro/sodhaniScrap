@@ -4,7 +4,7 @@ import csv from 'csv-parser';
 import { pool } from './db/pool';
 
 async function seedIndustries() {
-  const csvPath = path.resolve(__dirname, '../../sodhani-api/companies.csv');
+  const csvPath = path.resolve(__dirname, '../../sodhani-api/companies_rebuilt.csv');
   
   if (!fs.existsSync(csvPath)) {
     console.error(`CSV not found at ${csvPath}`);

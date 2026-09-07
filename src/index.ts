@@ -9,17 +9,43 @@ dotenv.config();
 
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '300000', 10);
 
+function isMarketOpen() {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "numeric",
+    weekday: "short",
+    hour12: false
+  }).formatToParts(new Date());
+
+  const hours = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+  const minutes = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+  const weekday = parts.find(p => p.type === 'weekday')?.value || '';
+
+  if (weekday === 'Sun' || weekday === 'Sat') return false;
+  
+  const timeNum = hours * 100 + minutes;
+  // 900 to 1545
+  return timeNum >= 900 && timeNum <= 1545;
+}
+
 async function startLivePolling() {
   console.log(`Starting Phase 3 Live Polling Loop every ${POLL_INTERVAL_MS / 1000} seconds...`);
     
   // Run immediately first
-  await bseLiveSync();
-  await nseLiveSync();
+  if (isMarketOpen()) {
+    await bseLiveSync();
+    await nseLiveSync();
+  }
     
   // Then schedule
   setInterval(async () => {
-    await bseLiveSync();
-    await nseLiveSync();
+    if (isMarketOpen()) {
+      await bseLiveSync();
+      await nseLiveSync();
+    } else {
+      console.log('Market is closed (IST). Skipping live sync.');
+    }
   }, POLL_INTERVAL_MS);
 }
 

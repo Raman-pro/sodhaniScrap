@@ -32,9 +32,16 @@ export async function spurtVolumeSync() {
             timeout: 15000,
             insecureHTTPParser: true 
         } as any);
-        const records = response.data || [];
-        
-        console.log(`Fetched ${records.length} Spurt Volume records.`);
+        // Fully numeric BSE scrip codes must start with 5 to be equities; non-numeric codes
+        // aren't part of that numbering scheme so leave them be.
+        const isEquityCode = (scripCd: any) => {
+            const code = String(scripCd);
+            return /^\d+$/.test(code) ? code.startsWith('5') : true;
+        };
+        const allRecords = response.data || [];
+        const records = allRecords.filter((rec: any) => isEquityCode(rec.scrip_cd));
+
+        console.log(`Fetched ${allRecords.length} Spurt Volume records, ${records.length} equities after filtering.`);
 
         if (records.length > 0) {
             const valuesToInsert = [];

@@ -28,7 +28,7 @@ export async function fetchHistoricalCatchup() {
     const res = await client.query(`
       SELECT c."FinInstrmId", c."TckrSymb", MAX(h."record_date") as last_record
       FROM company_stock c
-      LEFT JOIN historical_prices h ON c."FinInstrmId" = h."FinInstrmId"
+      LEFT JOIN historical_prices h ON c."FinInstrmId" = h."FinInstrmId" AND h.adj_close IS NOT NULL
       GROUP BY c."FinInstrmId", c."TckrSymb"
     `);
 
@@ -44,7 +44,7 @@ export async function fetchHistoricalCatchup() {
         
         const values = cleanResult.map((row: any) => [
           FinInstrmId,
-          row.date.toISOString(), // Preserve full timestamp instead of stripping time
+          row.date.toISOString().split('T')[0], // Strip time so PG inserts it as exactly 00:00:00 local
           row.open, row.high, row.low, row.close, row.adjclose || row.adjClose || null, row.volume
         ]);
 
@@ -86,7 +86,7 @@ export async function fetchHistoricalCatchup() {
       }
       
       const attemptFetch = async (symbol: string) => {
-        const result = await yahooFinance.chart(symbol, { period1, period2 });
+        const result = await yahooFinance.chart(symbol, { period1, period2 }, { validateResult: false });
         return result.quotes || [];
       };
 
@@ -99,7 +99,9 @@ export async function fetchHistoricalCatchup() {
         fetchedRowsCount = result?.length || 0;
         await upsertToDb(result, FinInstrmId);
         console.log(`Upserted ${fetchedRowsCount} rows for ${primarySymbol}`);
-        primarySuccess = true;
+        if (fetchedRowsCount > 0) {
+          primarySuccess = true;
+        }
       } catch (err: any) {
         console.error(`Error fetching for ${primarySymbol}: ${err.message}`);
       }
@@ -114,7 +116,7 @@ export async function fetchHistoricalCatchup() {
              fetchedRowsCount = fallbackResult?.length || 0;
              await upsertToDb(fallbackResult, FinInstrmId);
              console.log(`Upserted ${fetchedRowsCount} rows for ${fallbackSymbol}`);
-             if (fetchedRowsCount >= 20) {
+             if (fetchedRowsCount > 0) {
                primarySuccess = true;
              }
            } catch (fallbackErr: any) {
@@ -131,7 +133,7 @@ export async function fetchHistoricalCatchup() {
             fetchedRowsCount = nseResult?.length || 0;
             await upsertToDb(nseResult, FinInstrmId);
             console.log(`Upserted ${fetchedRowsCount} rows for ${nseSymbol}`);
-            if (fetchedRowsCount >= 20) {
+            if (fetchedRowsCount > 0) {
               primarySuccess = true;
             }
           } catch (nseErr: any) {
