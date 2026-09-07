@@ -15,6 +15,7 @@
     "start:ta": "tsx src/taWorker.ts",
     "start:indices": "tsx src/indices.ts",
     "skip_start:indices": "tsx src/indices.ts --skip_start",
+    "sync:extremes": "tsx src/scripts/syncExtremes.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

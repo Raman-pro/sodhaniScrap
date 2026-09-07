@@ -4,6 +4,7 @@ import { pool } from '../db/pool';
 import format from 'pg-format';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { updateLivePriceExtremes } from './priceExtremesService';
 const execFileAsync = promisify(execFile);
 
 const BSE_HEADERS = {
@@ -133,6 +134,22 @@ export async function bseLiveSync() {
 
     await client.query(query);
     console.log(`Successfully updated live prices for ${validValues.length} equities.`);
+
+    try {
+      const liveUpdates = validValues.map((v) => {
+        const finInstrmId = v[0];
+        const recordDate = v[1];
+        const high = parseFloat(v[3] || v[5] || '0');
+        const low = parseFloat(v[4] || v[5] || '0');
+        const tradeDate = String(recordDate).split('T')[0];
+        return { finInstrmId, high, low, tradeDate };
+      }).filter(u => u.high > 0 && u.low > 0);
+
+      await updateLivePriceExtremes(client, liveUpdates);
+      console.log(`Successfully updated live price extremes for ${liveUpdates.length} equities.`);
+    } catch (extremesErr: any) {
+      console.error('Error updating live price extremes:', extremesErr.message);
+    }
 
     // Update top 10 gainers and losers
     const topGainersLosersValues = [];

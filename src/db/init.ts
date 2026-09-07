@@ -292,11 +292,33 @@ export async function initDB() {
     `);
 
     // Create B-Tree index for optimization
+    // Create company_price_extremes table for pre-computed price ranges (1d, 1w, 1m, 1y, 5y, all)
     await client.query(`
-      CREATE INDEX IF NOT EXISTS "bse_index_history_idx" ON "bse_index_history"("sccode", "record_time" DESC);
+      CREATE TABLE IF NOT EXISTS "company_price_extremes"(
+          "FinInstrmId" VARCHAR(50) PRIMARY KEY,
+          "high_1d" DECIMAL(14, 4) NULL,
+          "low_1d" DECIMAL(14, 4) NULL,
+          "high_1w" DECIMAL(14, 4) NULL,
+          "low_1w" DECIMAL(14, 4) NULL,
+          "high_1m" DECIMAL(14, 4) NULL,
+          "low_1m" DECIMAL(14, 4) NULL,
+          "high_1y" DECIMAL(14, 4) NULL,
+          "low_1y" DECIMAL(14, 4) NULL,
+          "high_5y" DECIMAL(14, 4) NULL,
+          "low_5y" DECIMAL(14, 4) NULL,
+          "high_all" DECIMAL(14, 4) NULL,
+          "low_all" DECIMAL(14, 4) NULL,
+          "last_trade_date" DATE NULL,
+          "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "fk_company_price_extremes_stock"
+            FOREIGN KEY("FinInstrmId")
+            REFERENCES "company_stock"("FinInstrmId")
+            ON DELETE CASCADE
+      );
     `);
+
     await client.query(`
-      CREATE INDEX IF NOT EXISTS "nse_index_history_idx" ON "nse_index_history"("symbol", "record_time" DESC);
+      CREATE INDEX IF NOT EXISTS "company_price_extremes_idx" ON "company_price_extremes"("FinInstrmId");
     `);
 
     console.log('Database schema initialized successfully.');

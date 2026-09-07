@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 import format from 'pg-format';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { updateLivePriceExtremes } from './priceExtremesService';
 const execFileAsync = promisify(execFile);
 
 // Use curl to bypass NSE basic anti-bot which blocks axios/fetch
@@ -106,6 +107,22 @@ export async function nseLiveSync() {
 
     await client.query(query);
     console.log(`Successfully updated live prices for ${values.length} NSE equities.`);
+
+    try {
+      const liveUpdates = values.map((v) => {
+        const finInstrmId = v[0];
+        const recordDate = v[1];
+        const high = parseFloat(v[3] || v[5] || '0');
+        const low = parseFloat(v[4] || v[5] || '0');
+        const tradeDate = String(recordDate).split('T')[0];
+        return { finInstrmId, high, low, tradeDate };
+      }).filter(u => u.high > 0 && u.low > 0);
+
+      await updateLivePriceExtremes(client, liveUpdates);
+      console.log(`Successfully updated live price extremes for ${liveUpdates.length} NSE equities.`);
+    } catch (extremesErr: any) {
+      console.error('Error updating live price extremes (NSE):', extremesErr.message);
+    }
 
   } catch (err) {
     console.error('Error during NSE live sync DB upsert:', err);

@@ -5,6 +5,7 @@ import { pool } from '../db/pool';
 import format from 'pg-format';
 import fs from 'fs';
 import path from 'path';
+import { calculateAndUpsertCompanyPriceExtremes, syncAllPriceExtremes } from './priceExtremesService';
 
 export async function fetchHistoricalCatchup() {
   console.log('Phase 2: Historical Catch-Up (Yahoo Finance)');
@@ -142,8 +143,19 @@ export async function fetchHistoricalCatchup() {
       if (!primarySuccess || (isFullFetch && fetchedRowsCount < 20)) {
          console.error(`All attempts failed for ${primarySymbol}. Logging to failed_fetches.log`);
          fs.appendFileSync(logFilePath, `${new Date().toISOString()} - ${FinInstrmId}, Primary: ${primarySymbol}, Fallback: ${fallbackSymbol}, NSE: ${nseSymbol}, No fetch succeeded.\n`);
+      } else {
+         // Data successfully upserted for this company, calculate & store price extremes immediately
+         try {
+           await calculateAndUpsertCompanyPriceExtremes(client, FinInstrmId);
+         } catch (err: any) {
+           console.error(`Failed to update price extremes for ${FinInstrmId}: ${err.message}`);
+         }
       }
     }
+
+    console.log('Finalizing price extremes sync for all companies with historical data...');
+    const extremesCount = await syncAllPriceExtremes(client);
+    console.log(`Successfully populated/refreshed price extremes for ${extremesCount} companies.`);
   } catch (err) {
     console.error('Error during historical catch-up:', err);
   } finally {
