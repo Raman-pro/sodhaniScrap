@@ -51,14 +51,19 @@ export async function metricsSync() {
       console.error('Could not load mappings:', e.message);
     }
 
-    // Get all stocks and their latest price directly from company_stock to avoid querying the massive historical_prices table
+    // Get all stocks and their latest close price from historical_prices (kept
+    // fresh by the live/EOD sync jobs) rather than company_stock.LastPric,
+    // which is only ever populated from the bhavcopy CSV import and silently
+    // goes stale for any symbol that import stops covering.
     const historyResult = await client.query(`
-      SELECT 
-        "TckrSymb",
-        "FinInstrmId",
-        COALESCE("LastPric", 0) as close_price
-      FROM company_stock
-      WHERE "TckrSymb" IS NOT NULL
+      SELECT DISTINCT ON (cs."FinInstrmId")
+        cs."TckrSymb",
+        cs."FinInstrmId",
+        COALESCE(hp.close_price, 0) as close_price
+      FROM company_stock cs
+      LEFT JOIN historical_prices hp ON hp."FinInstrmId" = cs."FinInstrmId"
+      WHERE cs."TckrSymb" IS NOT NULL
+      ORDER BY cs."FinInstrmId", hp.record_date DESC
     `);
     
     console.log(`Found ${historyResult.rows.length} stocks with historical prices.`);
