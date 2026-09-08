@@ -143,9 +143,14 @@ export async function nseLiveSync() {
 
 let lastNsePrevCloseDate = '';
 
-async function syncPreviousCloseNSE(client: any, allData: any[], validCodesMap: Map<string, string>) {
+export async function syncPreviousCloseNSE(
+  client: any, 
+  allData: any[], 
+  validCodesMap: Map<string, string>,
+  force = false
+) {
   const todayStr = new Date().toISOString().split('T')[0];
-  if (lastNsePrevCloseDate === todayStr) {
+  if (!force && lastNsePrevCloseDate === todayStr) {
     return;
   }
 

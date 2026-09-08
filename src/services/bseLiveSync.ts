@@ -4,8 +4,44 @@ import { pool } from '../db/pool';
 import format from 'pg-format';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import fs from 'fs';
+import path from 'path';
 import { updateLivePriceExtremes } from './priceExtremesService';
 const execFileAsync = promisify(execFile);
+
+function getNseStockCodes(dbRows: any[]): Set<string> {
+  const nseCodes = new Set<string>();
+
+  try {
+    const jsonPath = path.join(__dirname, '../../companies.json');
+    if (fs.existsSync(jsonPath)) {
+      const data = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+      if (data.bse_to_nse) {
+        for (const bseCode of Object.keys(data.bse_to_nse)) {
+          nseCodes.add(bseCode);
+        }
+      }
+      if (data.nse_only) {
+        for (const nseCode of data.nse_only) {
+          nseCodes.add(nseCode);
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('Could not read companies.json for dual-listed mapping:', err.message);
+  }
+
+  for (const r of dbRows) {
+    if (r.Src === 'NSE') {
+      nseCodes.add(r.FinInstrmId);
+    }
+    if (r.TckrSymb && !r.TckrSymb.endsWith('.BO') && r.TckrSymb !== r.FinInstrmId) {
+      nseCodes.add(r.FinInstrmId);
+    }
+  }
+
+  return nseCodes;
+}
 
 const BSE_HEADERS = {
     "accept": "application/json, text/plain, */*",
@@ -115,8 +151,9 @@ export async function bseLiveSync() {
   const client = await pool.connect();
 
   try {
-    const validCodesRes = await client.query('SELECT "FinInstrmId" FROM company_stock');
+    const validCodesRes = await client.query('SELECT "FinInstrmId", "TckrSymb", "Src" FROM company_stock');
     const validCodes = new Set(validCodesRes.rows.map(r => r.FinInstrmId));
+    const nseCodes = getNseStockCodes(validCodesRes.rows);
     
     const validValues = values.filter(v => validCodes.has(v[0]));
 
@@ -141,8 +178,8 @@ export async function bseLiveSync() {
     await client.query(query);
     console.log(`Successfully updated live prices for ${validValues.length} equities.`);
 
-    // Sync official exchange previous close for all equities
-    await syncPreviousCloseBSE(client, allData, validCodes);
+    // Sync official exchange previous close for BSE-only equities
+    await syncPreviousCloseBSE(client, allData, validCodes, nseCodes);
 
     try {
       const liveUpdates = validValues.map((v) => {
@@ -235,13 +272,15 @@ export async function bseLiveSync() {
 
 let lastBsePrevCloseDate: string | null = null;
 
-async function syncPreviousCloseBSE(
+export async function syncPreviousCloseBSE(
   client: any, 
   allData: any[], 
-  validCodes: Set<string>
+  validCodes: Set<string>,
+  nseCodes: Set<string>,
+  force = false
 ) {
   const todayStr = new Date().toISOString().slice(0, 10);
-  if (lastBsePrevCloseDate === todayStr) {
+  if (!force && lastBsePrevCloseDate === todayStr) {
     return;
   }
 
@@ -253,6 +292,11 @@ async function syncPreviousCloseBSE(
 
     const finInstrmId = item.scrip_cd.toString();
     const prevClose = parseFloat(item.prevdayclose);
+
+    // Skip dual-listed / NSE stocks - their official previous close is managed by NSE
+    if (nseCodes.has(finInstrmId)) {
+      continue;
+    }
 
     if (validCodes.has(finInstrmId) && prevClose > 0 && !seen.has(finInstrmId)) {
       seen.add(finInstrmId);
@@ -301,7 +345,7 @@ async function syncPreviousCloseBSE(
 
     await client.query(format(sql, rows));
     lastBsePrevCloseDate = todayStr;
-    console.log(`Successfully synced official exchange previous close for ${rows.length} BSE equities.`);
+    console.log(`Successfully synced official exchange previous close for ${rows.length} BSE-only equities.`);
   } catch (err: any) {
     console.error('Error syncing BSE previous close:', err.message);
   }
