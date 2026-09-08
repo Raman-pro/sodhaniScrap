@@ -137,6 +137,15 @@ export async function metricsSync() {
                 industry_code = EXCLUDED.industry_code,
                 leaf_code = EXCLUDED.leaf_code
             `, [finInstrmId, companyName, sectorName, industryName, leafName, sectorCode, industryCode, leafCode]);
+
+            if (companyName) {
+              await client.query(`
+                UPDATE company_stock 
+                SET "FinInstrmNm" = $2 
+                WHERE ("FinInstrmId"::text = $1 OR "TckrSymb" = $1)
+                  AND ("FinInstrmNm" IS NULL OR "FinInstrmNm" = '')
+              `, [finInstrmId, companyName]);
+            }
           }
         }
 
