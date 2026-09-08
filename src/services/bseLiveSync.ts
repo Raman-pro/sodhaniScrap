@@ -163,10 +163,20 @@ export async function bseLiveSync() {
     // Update top 10 gainers and losers
     const topGainersLosersValues = [];
     
+    const safeIsoDate = (dtTm?: string) => {
+      if (dtTm) {
+        try {
+          const d = new Date(dtTm.replace('T', ' ') + " GMT+0530");
+          if (!isNaN(d.getTime())) return d.toISOString();
+        } catch {}
+      }
+      return new Date().toISOString();
+    };
+
     // Process Gainers (Top 50)
     for (let i = 0; i < Math.min(50, gainersList.length); i++) {
         const item = gainersList[i];
-        const recordTime = item.dt_tm ? new Date(item.dt_tm + " GMT+0530").toISOString() : new Date().toISOString();
+        const recordTime = safeIsoDate(item.dt_tm);
         topGainersLosersValues.push([
             recordTime,
             'gainer',
@@ -183,7 +193,7 @@ export async function bseLiveSync() {
     // Process Losers (Top 50)
     for (let i = 0; i < Math.min(50, losersList.length); i++) {
         const item = losersList[i];
-        const recordTime = item.dt_tm ? new Date(item.dt_tm + " GMT+0530").toISOString() : new Date().toISOString();
+        const recordTime = safeIsoDate(item.dt_tm);
         topGainersLosersValues.push([
             recordTime,
             'loser',
@@ -260,7 +270,7 @@ async function syncPreviousCloseBSE(
       target_dates AS (
         SELECT 
           ps.fin_id,
-          ps.prev_close,
+          ps.prev_close::numeric as prev_close,
           COALESCE(
             (SELECT MAX(DATE(hp.record_date)) FROM historical_prices hp WHERE hp."FinInstrmId" = ps.fin_id AND DATE(hp.record_date) < CURRENT_DATE),
             CASE 

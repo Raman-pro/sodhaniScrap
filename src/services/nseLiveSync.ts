@@ -173,7 +173,7 @@ async function syncPreviousCloseNSE(client: any, allData: any[], validCodesMap: 
       target_dates AS (
         SELECT 
           ps.fin_id,
-          ps.prev_close,
+          ps.prev_close::numeric as prev_close,
           COALESCE(
             (SELECT MAX(DATE(hp.record_date)) FROM historical_prices hp WHERE hp."FinInstrmId" = ps.fin_id AND DATE(hp.record_date) < CURRENT_DATE),
             CASE 
