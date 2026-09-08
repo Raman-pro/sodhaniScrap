@@ -141,6 +141,9 @@ export async function bseLiveSync() {
     await client.query(query);
     console.log(`Successfully updated live prices for ${validValues.length} equities.`);
 
+    // Sync official exchange previous close for all equities
+    await syncPreviousCloseBSE(client, allData, validCodes);
+
     try {
       const liveUpdates = validValues.map((v) => {
         const finInstrmId = v[0];
@@ -217,5 +220,79 @@ export async function bseLiveSync() {
     console.error('Error during BSE live sync DB upsert:', err);
   } finally {
     client.release();
+  }
+}
+
+let lastBsePrevCloseDate: string | null = null;
+
+async function syncPreviousCloseBSE(
+  client: any, 
+  allData: any[], 
+  validCodes: Set<string>
+) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (lastBsePrevCloseDate === todayStr) {
+    return;
+  }
+
+  const seen = new Set<string>();
+  const rows: any[] = [];
+
+  for (const item of allData) {
+    if (!item.scrip_cd || item.prevdayclose == null) continue;
+
+    const finInstrmId = item.scrip_cd.toString();
+    const prevClose = parseFloat(item.prevdayclose);
+
+    if (validCodes.has(finInstrmId) && prevClose > 0 && !seen.has(finInstrmId)) {
+      seen.add(finInstrmId);
+      rows.push([finInstrmId, prevClose]);
+    }
+  }
+
+  if (rows.length === 0) return;
+
+  try {
+    const sql = `
+      WITH prev_stocks(fin_id, prev_close) AS (
+        VALUES %L
+      ),
+      target_dates AS (
+        SELECT 
+          ps.fin_id,
+          ps.prev_close,
+          COALESCE(
+            (SELECT MAX(DATE(hp.record_date)) FROM historical_prices hp WHERE hp."FinInstrmId" = ps.fin_id AND DATE(hp.record_date) < CURRENT_DATE),
+            CASE 
+              WHEN EXTRACT(DOW FROM CURRENT_DATE) = 1 THEN (CURRENT_DATE - INTERVAL '3 days')::date
+              ELSE (CURRENT_DATE - INTERVAL '1 day')::date
+            END
+          ) as target_date
+        FROM prev_stocks ps
+      )
+      INSERT INTO historical_prices 
+        ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, adj_close, volume)
+      SELECT 
+        td.fin_id, 
+        td.target_date::timestamp, 
+        td.prev_close, 
+        td.prev_close, 
+        td.prev_close, 
+        td.prev_close, 
+        td.prev_close, 
+        0
+      FROM target_dates td
+      WHERE td.target_date IS NOT NULL
+      ON CONFLICT ("FinInstrmId", record_date) 
+      DO UPDATE SET 
+        close_price = EXCLUDED.close_price,
+        adj_close = COALESCE(historical_prices.adj_close, EXCLUDED.adj_close);
+    `;
+
+    await client.query(format(sql, rows));
+    lastBsePrevCloseDate = todayStr;
+    console.log(`Successfully synced official exchange previous close for ${rows.length} BSE equities.`);
+  } catch (err: any) {
+    console.error('Error syncing BSE previous close:', err.message);
   }
 }
