@@ -25,8 +25,8 @@ function isMarketOpen() {
   if (weekday === 'Sun' || weekday === 'Sat') return false;
   
   const timeNum = hours * 100 + minutes;
-  // 900 to 1610
-  return timeNum >= 900 && timeNum <= 1610;
+  // 918 to 1610 (Starts at 09:18 IST to allow regular 09:15 open to settle and avoid pre-market quirks)
+  return timeNum >= 918 && timeNum <= 1610;
 }
 
 async function startLivePolling() {

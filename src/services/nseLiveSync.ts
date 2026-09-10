@@ -161,8 +161,8 @@ export async function syncPreviousCloseNSE(
   const timeNum = hours * 100 + minutes;
 
   // Pre-market (09:00 - 09:15 IST) serves stale pre-open data.
-  // Never sync during pre-market. Wait until regular trading is underway (>= 09:20 IST).
-  if (!force && timeNum < 920) {
+  // Wait until regular trading is underway (>= 09:18 IST).
+  if (!force && timeNum < 918) {
     return;
   }
 
