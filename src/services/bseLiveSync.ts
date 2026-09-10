@@ -270,6 +270,7 @@ export async function bseLiveSync() {
   }
 }
 
+let lastBsePrevCloseHour = -1;
 let lastBsePrevCloseDate: string | null = null;
 
 export async function syncPreviousCloseBSE(
@@ -279,8 +280,24 @@ export async function syncPreviousCloseBSE(
   nseCodes: Set<string>,
   force = false
 ) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false
+  }).formatToParts(new Date());
+  const hours = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+  const minutes = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
+  const timeNum = hours * 100 + minutes;
+
+  // Pre-market (09:00 - 09:15 IST) serves stale pre-open data.
+  // Never sync during pre-market. Wait until regular trading is underway (>= 09:20 IST).
+  if (!force && timeNum < 920) {
+    return;
+  }
+
   const todayStr = new Date().toISOString().slice(0, 10);
-  if (!force && lastBsePrevCloseDate === todayStr) {
+  if (!force && lastBsePrevCloseDate === todayStr && lastBsePrevCloseHour === hours) {
     return;
   }
 
@@ -345,6 +362,7 @@ export async function syncPreviousCloseBSE(
 
     await client.query(format(sql, rows));
     lastBsePrevCloseDate = todayStr;
+    lastBsePrevCloseHour = hours;
     console.log(`Successfully synced official exchange previous close for ${rows.length} BSE-only equities.`);
   } catch (err: any) {
     console.error('Error syncing BSE previous close:', err.message);

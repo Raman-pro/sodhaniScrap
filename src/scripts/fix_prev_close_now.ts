@@ -34,65 +34,8 @@ async function verifyQuote(client: any, finId: string, label: string) {
 }
 
 async function main() {
-  console.log('--- Starting Previous Close Fix & Exchange Sync ---');
-  const client = await pool.connect();
+  console.log('--- Starting Real-Time Exchange Sync & Quote Verification ---');
 
-  try {
-    // 1. Explicitly fix SHETHJI (205.10)
-    console.log('Fixing SHETHJI previous close (205.10)...');
-    const shethjiRes = await client.query(`
-      SELECT MAX(DATE(record_date)) as prev_date 
-      FROM historical_prices 
-      WHERE "FinInstrmId" = 'SHETHJI' AND DATE(record_date) < CURRENT_DATE
-    `);
-    const shethjiPrevDate = shethjiRes.rows[0]?.prev_date 
-      ? new Date(shethjiRes.rows[0].prev_date).toISOString().slice(0, 10)
-      : '2026-09-07';
-
-    await client.query(`
-      INSERT INTO historical_prices 
-        ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, adj_close, volume)
-      VALUES 
-        ('SHETHJI', $1::timestamp, 205.10, 205.10, 205.10, 205.10, 205.10, 0)
-      ON CONFLICT ("FinInstrmId", record_date) 
-      DO UPDATE SET 
-        close_price = 205.10,
-        adj_close = 205.10;
-    `, [`${shethjiPrevDate} 00:00:00`]);
-
-    // 2. Explicitly fix TCS / 532540 (2270.00)
-    console.log('Fixing TCS (532540) previous close (2270.00)...');
-    const tcsRes = await client.query(`
-      SELECT MAX(DATE(record_date)) as prev_date 
-      FROM historical_prices 
-      WHERE "FinInstrmId" = '532540' AND DATE(record_date) < CURRENT_DATE
-    `);
-    const tcsPrevDate = tcsRes.rows[0]?.prev_date 
-      ? new Date(tcsRes.rows[0].prev_date).toISOString().slice(0, 10)
-      : '2026-09-07';
-
-    await client.query(`
-      INSERT INTO historical_prices 
-        ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, adj_close, volume)
-      VALUES 
-        ('532540', $1::timestamp, 2270.00, 2270.00, 2270.00, 2270.00, 2270.00, 0)
-      ON CONFLICT ("FinInstrmId", record_date) 
-      DO UPDATE SET 
-        close_price = 2270.00,
-        adj_close = 2270.00;
-    `, [`${tcsPrevDate} 00:00:00`]);
-
-    // Initial check
-    await verifyQuote(client, 'SHETHJI', 'SHETHJI');
-    await verifyQuote(client, '532540', 'TCS');
-
-  } catch (err: any) {
-    console.error('Error during explicit fixes:', err.message);
-  } finally {
-    client.release();
-  }
-
-  // 3. Trigger BSE Live Sync first (which now skips dual-listed/NSE stocks)
   console.log('\n--- Syncing BSE equities (BSE-only previous closes) ---');
   try {
     await bseLiveSync();
@@ -100,7 +43,6 @@ async function main() {
     console.error('BSE sync error:', e.message);
   }
 
-  // 4. Trigger NSE Live Sync (which syncs official NSE previous closes for all dual-listed & NSE stocks)
   console.log('\n--- Syncing NSE equities (NSE official previous closes) ---');
   try {
     await nseLiveSync();
@@ -108,12 +50,12 @@ async function main() {
     console.error('NSE sync error:', e.message);
   }
 
-  // 5. Final Verification
   console.log('\n--- Final Verification ---');
   const verifyClient = await pool.connect();
   try {
-    await verifyQuote(verifyClient, 'SHETHJI', 'SHETHJI');
+    await verifyQuote(verifyClient, '509820', 'HUHTAMAKI');
     await verifyQuote(verifyClient, '532540', 'TCS');
+    await verifyQuote(verifyClient, 'SHETHJI', 'SHETHJI');
   } finally {
     verifyClient.release();
   }
