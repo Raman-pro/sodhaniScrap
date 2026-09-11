@@ -143,6 +143,24 @@ export async function fetchHistoricalCatchup() {
       }
 
       if (!primarySuccess || (isFullFetch && fetchedRowsCount < 20)) {
+        const smeSymbol = `${FinInstrmId.replace(/\.NS$/i, '')}-SM.NS`;
+        if (smeSymbol !== primarySymbol && smeSymbol !== fallbackSymbol && smeSymbol !== nseSymbol) {
+          try {
+            console.log(`Trying SME fallback ${smeSymbol} from ${period1} to ${period2}`);
+            const smeResult = await attemptFetch(smeSymbol);
+            fetchedRowsCount = smeResult?.length || 0;
+            await upsertToDb(smeResult, FinInstrmId);
+            console.log(`Upserted ${fetchedRowsCount} rows for ${smeSymbol}`);
+            if (fetchedRowsCount > 0) {
+              primarySuccess = true;
+            }
+          } catch (smeErr: any) {
+            console.error(`Error fetching for SME fallback ${smeSymbol}: ${smeErr.message}`);
+          }
+        }
+      }
+
+      if (!primarySuccess || (isFullFetch && fetchedRowsCount < 20)) {
          console.error(`All attempts failed for ${primarySymbol}. Logging to failed_fetches.log`);
          fs.appendFileSync(logFilePath, `${new Date().toISOString()} - ${FinInstrmId}, Primary: ${primarySymbol}, Fallback: ${fallbackSymbol}, NSE: ${nseSymbol}, No fetch succeeded.\n`);
       } else {
