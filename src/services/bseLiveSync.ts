@@ -35,9 +35,6 @@ function getNseStockCodes(dbRows: any[]): Set<string> {
     if (r.Src === 'NSE') {
       nseCodes.add(r.FinInstrmId);
     }
-    if (r.TckrSymb && !r.TckrSymb.endsWith('.BO') && r.TckrSymb !== r.FinInstrmId) {
-      nseCodes.add(r.FinInstrmId);
-    }
   }
 
   return nseCodes;
