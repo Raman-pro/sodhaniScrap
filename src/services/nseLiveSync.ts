@@ -81,6 +81,11 @@ export async function nseLiveSync() {
           const rawVolume = item.totalTradedVolume || 0;
           const absoluteVolume = Math.floor(rawVolume * 100000);
 
+          // The official exchange previous close ships in the same record as the
+          // last price, so it rides along on this row rather than needing a
+          // second pass that back-writes into yesterday's bar.
+          const prevClose = parseFloat(item.previousClose);
+
           values.push([
             finInstrmId, // FinInstrmId
             recordDate,
@@ -88,7 +93,8 @@ export async function nseLiveSync() {
             item.lastPrice, // Initial high_price guess
             item.lastPrice, // Initial low_price guess
             item.lastPrice, // close_price (current price)
-            absoluteVolume
+            absoluteVolume,
+            prevClose > 0 ? prevClose : null
           ]);
         }
       }
@@ -100,23 +106,21 @@ export async function nseLiveSync() {
     }
 
     const query = format(`
-      INSERT INTO historical_prices 
-      ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, volume)
+      INSERT INTO historical_prices
+      ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, volume, prev_close)
       VALUES %L
-      ON CONFLICT ("FinInstrmId", record_date) 
-      DO UPDATE SET 
+      ON CONFLICT ("FinInstrmId", record_date)
+      DO UPDATE SET
         open_price = COALESCE(historical_prices.open_price, EXCLUDED.open_price),
         high_price = GREATEST(historical_prices.high_price, EXCLUDED.close_price),
         low_price = LEAST(historical_prices.low_price, EXCLUDED.close_price),
         close_price = EXCLUDED.close_price,
-        volume = EXCLUDED.volume
+        volume = EXCLUDED.volume,
+        prev_close = COALESCE(EXCLUDED.prev_close, historical_prices.prev_close)
     `, values);
 
     await client.query(query);
     console.log(`Successfully updated live prices for ${values.length} NSE equities.`);
-
-    // Sync official exchange previous close for all equities
-    await syncPreviousCloseNSE(client, allData, validCodesMap);
 
     try {
       const liveUpdates = values.map((v) => {
@@ -140,90 +144,3 @@ export async function nseLiveSync() {
     client.release();
   }
 }
-
-
-
-export async function syncPreviousCloseNSE(
-  client: any, 
-  allData: any[], 
-  validCodesMap: Map<string, string>,
-  force = false
-) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Kolkata",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: false
-  }).formatToParts(new Date());
-  const hours = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-  const minutes = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
-  const timeNum = hours * 100 + minutes;
-
-  // Pre-market (09:00 - 09:15 IST) serves stale pre-open data.
-  // Wait until regular trading is underway (>= 09:18 IST).
-  if (!force && timeNum < 918) {
-    return;
-  }
-
-
-
-  const seen = new Set<string>();
-  const rows: any[] = [];
-
-  for (const item of allData) {
-    const symbol = item.symbol;
-    const finInstrmId = validCodesMap.get(symbol);
-    const prevClose = parseFloat(item.previousClose);
-
-    if (finInstrmId && prevClose > 0 && !seen.has(finInstrmId)) {
-      seen.add(finInstrmId);
-      rows.push([finInstrmId, prevClose]);
-    }
-  }
-
-  if (rows.length === 0) return;
-
-  try {
-    const sql = `
-      WITH prev_stocks(fin_id, prev_close) AS (
-        VALUES %L
-      ),
-      target_dates AS (
-        SELECT 
-          ps.fin_id,
-          ps.prev_close::numeric as prev_close,
-          COALESCE(
-            (SELECT MAX(DATE(hp.record_date)) FROM historical_prices hp WHERE hp."FinInstrmId" = ps.fin_id AND DATE(hp.record_date) < CURRENT_DATE),
-            CASE 
-              WHEN EXTRACT(DOW FROM CURRENT_DATE) = 1 THEN (CURRENT_DATE - INTERVAL '3 days')::date
-              ELSE (CURRENT_DATE - INTERVAL '1 day')::date
-            END
-          ) as target_date
-        FROM prev_stocks ps
-      )
-      INSERT INTO historical_prices 
-        ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, adj_close, volume)
-      SELECT 
-        td.fin_id, 
-        td.target_date::timestamp, 
-        td.prev_close, 
-        td.prev_close, 
-        td.prev_close, 
-        td.prev_close, 
-        td.prev_close, 
-        0
-      FROM target_dates td
-      WHERE td.target_date IS NOT NULL
-      ON CONFLICT ("FinInstrmId", record_date) 
-      DO UPDATE SET 
-        close_price = EXCLUDED.close_price,
-        adj_close = COALESCE(historical_prices.adj_close, EXCLUDED.adj_close);
-    `;
-
-    await client.query(format(sql, rows));
-    console.log(`Successfully synced official exchange previous close for ${rows.length} NSE equities.`);
-  } catch (err: any) {
-    console.error('Error syncing NSE previous close:', err.message);
-  }
-}
-

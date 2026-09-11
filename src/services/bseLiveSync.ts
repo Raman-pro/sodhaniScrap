@@ -131,6 +131,12 @@ export async function bseLiveSync() {
     
     if (!seen.has(key)) {
       seen.add(key);
+
+      // The official exchange previous close ships in the same record as the
+      // last traded price, so it rides along on this row rather than needing a
+      // second pass that back-writes into yesterday's bar.
+      const prevClose = parseFloat(item.prevdayclose);
+
       values.push([
         item.scrip_cd.toString(), // FinInstrmId
         recordDate,
@@ -138,7 +144,8 @@ export async function bseLiveSync() {
         item.highrate,
         item.lowrate,
         item.ltradert, // close_price
-        item.trd_vol
+        item.trd_vol,
+        prevClose > 0 ? prevClose : null
       ]);
     }
   }
@@ -152,7 +159,14 @@ export async function bseLiveSync() {
     const validCodes = new Set(validCodesRes.rows.map(r => r.FinInstrmId));
     const nseCodes = getNseStockCodes(validCodesRes.rows);
     
-    const validValues = values.filter(v => validCodes.has(v[0]));
+    // NSE is the authority on previous close for dual-listed scrips. nseLiveSync
+    // runs after this one and writes its own row (at its own timestamp) for the
+    // same trading day, so keeping the BSE value here would leave two different
+    // prev_close values on the same day with no way to tell which one wins.
+    // Drop it for those codes instead; the NSE row supplies it.
+    const validValues = values
+      .filter(v => validCodes.has(v[0]))
+      .map(v => (nseCodes.has(v[0]) ? [...v.slice(0, 7), null] : v));
 
     if (validValues.length === 0) {
       console.log('No valid equities matched in database. Skipping live sync.');
@@ -160,23 +174,21 @@ export async function bseLiveSync() {
     }
 
     const query = format(`
-      INSERT INTO historical_prices 
-      ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, volume)
+      INSERT INTO historical_prices
+      ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, volume, prev_close)
       VALUES %L
-      ON CONFLICT ("FinInstrmId", record_date) 
-      DO UPDATE SET 
+      ON CONFLICT ("FinInstrmId", record_date)
+      DO UPDATE SET
         open_price = COALESCE(EXCLUDED.open_price, historical_prices.open_price),
         high_price = EXCLUDED.high_price,
         low_price = EXCLUDED.low_price,
         close_price = EXCLUDED.close_price,
-        volume = EXCLUDED.volume
+        volume = EXCLUDED.volume,
+        prev_close = COALESCE(EXCLUDED.prev_close, historical_prices.prev_close)
     `, validValues);
 
     await client.query(query);
     console.log(`Successfully updated live prices for ${validValues.length} equities.`);
-
-    // Sync official exchange previous close for BSE-only equities
-    await syncPreviousCloseBSE(client, allData, validCodes, nseCodes);
 
     try {
       const liveUpdates = validValues.map((v) => {
@@ -264,98 +276,5 @@ export async function bseLiveSync() {
     console.error('Error during BSE live sync DB upsert:', err);
   } finally {
     client.release();
-  }
-}
-
-
-
-export async function syncPreviousCloseBSE(
-  client: any, 
-  allData: any[], 
-  validCodes: Set<string>,
-  nseCodes: Set<string>,
-  force = false
-) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Kolkata",
-    hour: "numeric",
-    minute: "numeric",
-    hour12: false
-  }).formatToParts(new Date());
-  const hours = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-  const minutes = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
-  const timeNum = hours * 100 + minutes;
-
-  // Pre-market (09:00 - 09:15 IST) serves stale pre-open data.
-  // Wait until regular trading is underway (>= 09:18 IST).
-  if (!force && timeNum < 918) {
-    return;
-  }
-
-
-
-  const seen = new Set<string>();
-  const rows: any[] = [];
-
-  for (const item of allData) {
-    if (!item.scrip_cd || item.prevdayclose == null) continue;
-
-    const finInstrmId = item.scrip_cd.toString();
-    const prevClose = parseFloat(item.prevdayclose);
-
-    // Skip dual-listed / NSE stocks - their official previous close is managed by NSE
-    if (nseCodes.has(finInstrmId)) {
-      continue;
-    }
-
-    if (validCodes.has(finInstrmId) && prevClose > 0 && !seen.has(finInstrmId)) {
-      seen.add(finInstrmId);
-      rows.push([finInstrmId, prevClose]);
-    }
-  }
-
-  if (rows.length === 0) return;
-
-  try {
-    const sql = `
-      WITH prev_stocks(fin_id, prev_close) AS (
-        VALUES %L
-      ),
-      target_dates AS (
-        SELECT 
-          ps.fin_id,
-          ps.prev_close::numeric as prev_close,
-          COALESCE(
-            (SELECT MAX(DATE(hp.record_date)) FROM historical_prices hp WHERE hp."FinInstrmId" = ps.fin_id AND DATE(hp.record_date) < CURRENT_DATE),
-            CASE 
-              WHEN EXTRACT(DOW FROM CURRENT_DATE) = 1 THEN (CURRENT_DATE - INTERVAL '3 days')::date
-              ELSE (CURRENT_DATE - INTERVAL '1 day')::date
-            END
-          ) as target_date
-        FROM prev_stocks ps
-      )
-      INSERT INTO historical_prices 
-        ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, adj_close, volume)
-      SELECT 
-        td.fin_id, 
-        td.target_date::timestamp, 
-        td.prev_close, 
-        td.prev_close, 
-        td.prev_close, 
-        td.prev_close, 
-        td.prev_close, 
-        0
-      FROM target_dates td
-      WHERE td.target_date IS NOT NULL
-      ON CONFLICT ("FinInstrmId", record_date) 
-      DO UPDATE SET 
-        close_price = EXCLUDED.close_price,
-        adj_close = COALESCE(historical_prices.adj_close, EXCLUDED.adj_close);
-    `;
-
-    await client.query(format(sql, rows));
-    console.log(`Successfully synced official exchange previous close for ${rows.length} BSE-only equities.`);
-  } catch (err: any) {
-    console.error('Error syncing BSE previous close:', err.message);
   }
 }

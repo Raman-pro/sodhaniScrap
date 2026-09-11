@@ -49,6 +49,7 @@ export async function initDB() {
           "low_price" DECIMAL(14, 6) NULL,
           "close_price" DECIMAL(14, 6) NULL,
           "adj_close" DOUBLE PRECISION NULL,
+          "prev_close" DECIMAL(14, 6) NULL,
           "volume" BIGINT NULL,
           "dividends" DECIMAL(10, 4) NULL,
           "stock_splits" DECIMAL(10, 4) NULL,
@@ -64,6 +65,7 @@ export async function initDB() {
       ALTER TABLE "historical_prices" 
       ADD COLUMN IF NOT EXISTS "volume" BIGINT NULL,
       ADD COLUMN IF NOT EXISTS "adj_close" DOUBLE PRECISION NULL,
+      ADD COLUMN IF NOT EXISTS "prev_close" DECIMAL(14, 6) NULL,
       ADD COLUMN IF NOT EXISTS "dividends" DECIMAL(10, 4) NULL,
       ADD COLUMN IF NOT EXISTS "stock_splits" DECIMAL(10, 4) NULL;
     `);
