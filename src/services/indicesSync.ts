@@ -11,19 +11,19 @@ dotenv.config();
 
 const GRAPH_DATA_URL = 'https://api.bseindia.com/BseIndiaAPI/api/SensexGraphData_CAS/w';
 
-export const HEADERS = {
-    "accept": "*/*",
+export const HEADERS: Record<string, string> = {
+    "accept": "application/json, text/plain, */*",
     "accept-encoding": "gzip, deflate, br, zstd",
     "accept-language": "en-US,en-IN;q=0.9,en;q=0.8",
     "origin": "https://www.bseindia.com",
     "priority": "u=1, i",
-    "referer": "https://www.bseindia.com/",
     "sec-ch-ua": "\"Not;A=Brand\";v=\"8\", \"Chromium\";v=\"150\", \"Google Chrome\";v=\"150\"",
     "sec-ch-ua-mobile": "?0",
     "sec-ch-ua-platform": "\"macOS\"",
     "sec-fetch-dest": "empty",
     "sec-fetch-mode": "cors",
     "sec-fetch-site": "same-site",
+    "referer": "https://www.bseindia.com/",
     "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 };
 
@@ -78,7 +78,14 @@ export function loadIndices(): BseIndex[] {
 }
 
 export function parseGraphResponse(raw: any): { header: IndexGraphHeader | null; points: IndexHistoryPoint[] } {
-    const text = typeof raw === 'string' ? raw : String(raw ?? '');
+    let text = typeof raw === 'string' ? raw.trim() : String(raw ?? '').trim();
+    if (text.startsWith('"') && text.endsWith('"')) {
+        try {
+            text = JSON.parse(text);
+        } catch {
+            // keep text as-is if parse fails
+        }
+    }
     const [rawHeader, rawPoints] = text.split('#@#');
 
     let header: IndexGraphHeader | null = null;
@@ -114,34 +121,22 @@ export function parseGraphResponse(raw: any): { header: IndexGraphHeader | null;
     return { header, points };
 }
 
-import { execFile } from 'child_process';
-import { promisify } from 'util';
-const execFileAsync = promisify(execFile);
 
 async function fetchGraphData(sccode: string, opts: { flag: 0 | 1; seriesid: 'DT' | 'R'; frd: string; tod: string }) {
     const url = `${GRAPH_DATA_URL}?index=${sccode}&flag=${opts.flag}&sector=&seriesid=${opts.seriesid}&frd=${opts.frd}&tod=${opts.tod}`;
     try {
-        const { stdout } = await execFileAsync('curl', [
-            '-s', '-m', '15',
-            '-H', `accept: ${HEADERS.accept}`,
-            '-H', `accept-encoding: ${HEADERS['accept-encoding']}`,
-            '-H', `accept-language: ${HEADERS['accept-language']}`,
-            '-H', `origin: ${HEADERS.origin}`,
-            '-H', `priority: ${HEADERS.priority}`,
-            '-H', `referer: ${HEADERS.referer}`,
-            '-H', `sec-ch-ua: ${HEADERS['sec-ch-ua']}`,
-            '-H', `sec-ch-ua-mobile: ${HEADERS['sec-ch-ua-mobile']}`,
-            '-H', `sec-ch-ua-platform: ${HEADERS['sec-ch-ua-platform']}`,
-            '-H', `sec-fetch-dest: ${HEADERS['sec-fetch-dest']}`,
-            '-H', `sec-fetch-mode: ${HEADERS['sec-fetch-mode']}`,
-            '-H', `sec-fetch-site: ${HEADERS['sec-fetch-site']}`,
-            '-H', `user-agent: ${HEADERS['user-agent']}`,
-            url
-        ], { maxBuffer: 10 * 1024 * 1024 });
-        
-        return parseGraphResponse(stdout);
+        const res = await fetch(url, {
+            headers: HEADERS as any,
+            signal: AbortSignal.timeout(15000)
+        });
+        if (!res.ok) {
+            console.error(`Indices Fetch HTTP Error for sccode=${sccode}: status=${res.status}`);
+            return { header: null, points: [] };
+        }
+        const text = await res.text();
+        return parseGraphResponse(text);
     } catch (error: any) {
-        console.error(`Indices Fetch Error for sccode=${sccode} (curl):`, error.message);
+        console.error(`Indices Fetch Error for sccode=${sccode}:`, error.message);
         return { header: null, points: [] };
     }
 }

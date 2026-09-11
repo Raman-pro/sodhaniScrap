@@ -2,13 +2,10 @@ import { pool } from '../db/pool';
 // @ts-ignore
 import format from 'pg-format';
 import dotenv from 'dotenv';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import { loadIndices, HEADERS } from './indicesSync';
 
 dotenv.config();
 
-const execFileAsync = promisify(execFile);
 const REQUEST_DELAY_MS = parseInt(process.env.INDICES_REQUEST_DELAY_MS || '300', 10);
 
 // BSE's HeatMapData endpoint always returns exactly 30 slots. Indices with
@@ -20,24 +17,15 @@ const REQUEST_DELAY_MS = parseInt(process.env.INDICES_REQUEST_DELAY_MS || '300',
 // will grow across runs as different movers surface.
 const PADDING_TICKER = 'aaaa';
 
-function curlFetch(url: string) {
-    return execFileAsync('curl', [
-        '-s', '-m', '15', '--compressed',
-        '-H', `accept: ${HEADERS.accept}`,
-        '-H', `accept-encoding: ${HEADERS['accept-encoding']}`,
-        '-H', `accept-language: ${HEADERS['accept-language']}`,
-        '-H', `origin: ${HEADERS.origin}`,
-        '-H', `priority: ${HEADERS.priority}`,
-        '-H', `referer: ${HEADERS.referer}`,
-        '-H', `sec-ch-ua: ${HEADERS['sec-ch-ua']}`,
-        '-H', `sec-ch-ua-mobile: ${HEADERS['sec-ch-ua-mobile']}`,
-        '-H', `sec-ch-ua-platform: ${HEADERS['sec-ch-ua-platform']}`,
-        '-H', `sec-fetch-dest: ${HEADERS['sec-fetch-dest']}`,
-        '-H', `sec-fetch-mode: ${HEADERS['sec-fetch-mode']}`,
-        '-H', `sec-fetch-site: ${HEADERS['sec-fetch-site']}`,
-        '-H', `user-agent: ${HEADERS['user-agent']}`,
-        url
-    ], { maxBuffer: 10 * 1024 * 1024 }).then(({ stdout }) => stdout);
+async function curlFetch(url: string): Promise<string> {
+    const res = await fetch(url, {
+        headers: HEADERS,
+        signal: AbortSignal.timeout(15000)
+    });
+    if (!res.ok) {
+        throw new Error(`HTTP error ${res.status}`);
+    }
+    return res.text();
 }
 
 export function parseHeatMap(raw: string): { tckr: string; scripCode: string }[] {
