@@ -270,8 +270,7 @@ export async function bseLiveSync() {
   }
 }
 
-let lastBsePrevCloseHour = -1;
-let lastBsePrevCloseDate: string | null = null;
+
 
 export async function syncPreviousCloseBSE(
   client: any, 
@@ -296,10 +295,7 @@ export async function syncPreviousCloseBSE(
     return;
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  if (!force && lastBsePrevCloseDate === todayStr && lastBsePrevCloseHour === hours) {
-    return;
-  }
+
 
   const seen = new Set<string>();
   const rows: any[] = [];
@@ -361,8 +357,6 @@ export async function syncPreviousCloseBSE(
     `;
 
     await client.query(format(sql, rows));
-    lastBsePrevCloseDate = todayStr;
-    lastBsePrevCloseHour = hours;
     console.log(`Successfully synced official exchange previous close for ${rows.length} BSE-only equities.`);
   } catch (err: any) {
     console.error('Error syncing BSE previous close:', err.message);

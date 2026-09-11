@@ -141,8 +141,7 @@ export async function nseLiveSync() {
   }
 }
 
-let lastNsePrevCloseHour = -1;
-let lastNsePrevCloseDate = '';
+
 
 export async function syncPreviousCloseNSE(
   client: any, 
@@ -166,10 +165,7 @@ export async function syncPreviousCloseNSE(
     return;
   }
 
-  const todayStr = new Date().toISOString().split('T')[0];
-  if (!force && lastNsePrevCloseDate === todayStr && lastNsePrevCloseHour === hours) {
-    return;
-  }
+
 
   const seen = new Set<string>();
   const rows: any[] = [];
@@ -225,8 +221,6 @@ export async function syncPreviousCloseNSE(
     `;
 
     await client.query(format(sql, rows));
-    lastNsePrevCloseDate = todayStr;
-    lastNsePrevCloseHour = hours;
     console.log(`Successfully synced official exchange previous close for ${rows.length} NSE equities.`);
   } catch (err: any) {
     console.error('Error syncing NSE previous close:', err.message);
