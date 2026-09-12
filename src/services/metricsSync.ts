@@ -56,14 +56,19 @@ export async function metricsSync() {
     // which is only ever populated from the bhavcopy CSV import and silently
     // goes stale for any symbol that import stops covering.
     const historyResult = await client.query(`
-      SELECT DISTINCT ON (cs."FinInstrmId")
+      SELECT
         cs."TckrSymb",
         cs."FinInstrmId",
-        COALESCE(hp.close_price, 0) as close_price
+        COALESCE(hp.close_price, cs."LastPric", 0) as close_price
       FROM company_stock cs
-      LEFT JOIN historical_prices hp ON hp."FinInstrmId" = cs."FinInstrmId"
+      LEFT JOIN LATERAL (
+        SELECT close_price
+        FROM historical_prices hp
+        WHERE hp."FinInstrmId" = cs."FinInstrmId"
+        ORDER BY record_date DESC
+        LIMIT 1
+      ) hp ON true
       WHERE cs."TckrSymb" IS NOT NULL
-      ORDER BY cs."FinInstrmId", hp.record_date DESC
     `);
     
     console.log(`Found ${historyResult.rows.length} stocks with historical prices.`);
