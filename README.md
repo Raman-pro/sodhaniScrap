@@ -23,6 +23,13 @@ A separate worker (`src/indices.ts`) ingests index-level data for **both exchang
 * **NSE indices** — NIFTY 50, BANK, FIN SERVICE, FPI 150, MID SELECT, and NEXT 50, defined in `nse_indices.json`, via NSE's `NextApi` endpoints. On start it seeds `nse_indices`, backfills 1 year of daily closes into `nse_index_history`, then polls on the same `INDICES_POLL_INTERVAL_MS` cadence for today's close, the latest intraday tick, and market-breadth counts (advances/declines/unchanged). Each poll also refreshes that index's constituent mapping (`nse_index_constituents`) and pushes live OHLCV for each constituent straight into `historical_prices`.
 * **BSE index constituents** — a lower-frequency pass (`BSE_CONSTITUENTS_INTERVAL_MS`, default 1 hour) that scrapes BSE's public heatmap feed (`HeatMapData`) for every index in `indices.json` and upserts the ticker → index membership into `bse_index_constituents`. Unlike NSE, **this feed is capped at exactly 30 rows per index by BSE itself** — complete for indices with ≤30 members (SENSEX, BANKEX, sectorals), but only that day's 30 biggest movers for broader indices (BSE 500, BSE 1000, …), so membership for those grows/rotates across runs rather than being a stable, complete set. It does not write prices — those stay owned by the core BSE live sync (Phase 3) to avoid two writers on the same `historical_prices` rows.
 
+### Volume & Delivery Worker (BSE + NSE)
+An independent background worker (`src/volumeWorker.ts` / `src/services/volumeSync.ts`) that ingests official end-of-day equity volume and delivery statistics from BSE and NSE Bhavcopies:
+* **BSE Bhavcopy** — downloads daily `SCBSEALL{DD}{MM}.zip` in-memory from BSE India, parses `SC_CODE`, total traded quantity (`NO_OF_SHRS`), total turnover (`NET_TURNOV`), deliverable quantity (`DELIV_QTY`), and delivery percentage (`DELIV_PER`), and upserts into `bse_volume_history`.
+* **NSE Bhavcopy** — fetches `sec_bhavdata_full_{DD}{MM}{YYYY}.csv` with spoofed browser headers and cookies, parses EQ/BE equity series for `SYMBOL`, traded volume (`TTL_TRD_QNTY`), turnover (`TURNOVER_LACS`), deliverable quantity (`DELIV_QTY`), and delivery percentage (`DELIV_PER`), and upserts into `nse_volume_history`.
+* **Cadence & Catch-Up** — runs an evening sync window between 17:30 and 20:30 IST on trading days (retrying every 15 minutes until both Bhavcopies are published and synced). On process startup, it automatically checks and catches up on the previous trading day if not yet synced.
+* **Historical Backfill** — a standalone script (`src/scripts/backfillVolumes.ts`) backfills historical volume series from `historical_prices` into `bse_volume_history` and `nse_volume_history` via chunked, idempotent batch inserts.
+
 ## Prerequisites
 
 * **Node.js**: v18 or later.
@@ -106,6 +113,28 @@ To skip database init, seeding, and the history backfill and jump straight into 
 npm run skip_start:indices
 ```
 
+### Running the Volume & Delivery Worker (BSE + NSE)
+
+To run the BSE + NSE daily Bhavcopy volume worker daemon:
+
+```bash
+npm run start:volume
+```
+
+To skip database initialization and jump directly into the evening polling scheduler:
+
+```bash
+npm run skip_start:volume
+```
+
+### Running Historical Volume Backfill
+
+To backfill historical volume series from existing `historical_prices` into `bse_volume_history` and `nse_volume_history`:
+
+```bash
+npm run backfill:volumes
+```
+
 ### Skipping Bootstrapping (Live Sync Only)
 
 If the database is already fully bootstrapped with historical data and you simply want to jump directly into the **Phase 3 Live Polling Loop**, you can run:
@@ -124,6 +153,9 @@ node dist/index.js
 
 # To run the announcements worker in production:
 node dist/announcements.js
+
+# To run the volume worker in production:
+node dist/volumeWorker.js
 ```
 
 ## Database Schema Highlights
@@ -139,3 +171,5 @@ The pipeline enforces a tight schema:
 * `nse_indices`: Static master list of NSE indices (`symbol`, `name`) seeded from `nse_indices.json`.
 * `nse_index_history`: Unified NSE index series (daily closes and intraday ticks), including market-breadth counts (`advances`, `declines`, `unchanged`). Composite primary key on `("symbol", "record_time")`. Unlike the BSE table, `session` is always NULL here — a daily bar vs. an intraday tick is distinguished by whether `record_time`'s time-of-day component is exactly midnight.
 * `nse_index_constituents`: NSE index → member stock mapping (`index_symbol`, `stock_symbol`, the latter actually holding a `company_stock."FinInstrmId"`). Unlike BSE, this is the complete membership for every index (NIFTY 50 → 50 rows, NIFTY FPI 150 → 150 rows, etc.), refreshed on every poll.
+* `bse_volume_history`: Daily volume, deliverable quantity, delivery percentage, and turnover for BSE scrips. Composite primary key on `("scrip_code", "record_date")` and B-Tree index on `("scrip_code", "record_date" DESC)`.
+* `nse_volume_history`: Daily volume, deliverable quantity, delivery percentage, and turnover for NSE symbols. Composite primary key on `("symbol", "record_date")` and B-Tree index on `("symbol", "record_date" DESC)`.

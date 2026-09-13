@@ -347,6 +347,49 @@ export async function initDB() {
       CREATE INDEX IF NOT EXISTS "research_reports_fin_instrm_id_idx" ON "research_reports"("fin_instrm_id");
     `);
 
+    // Create bse_volume_history table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "bse_volume_history"(
+          "scrip_cd" VARCHAR(50) NOT NULL,
+          "record_date" DATE NOT NULL,
+          "volume" BIGINT NULL,
+          "delivery_qty" BIGINT NULL,
+          "delivery_val" DECIMAL(24, 4) NULL,
+          "turnover" DECIMAL(24, 4) NULL,
+          "delivery_pct" DECIMAL(6, 2) NULL,
+          "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY("scrip_cd", "record_date")
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "bse_volume_history_idx" ON "bse_volume_history"("scrip_cd", "record_date" DESC);
+      CREATE INDEX IF NOT EXISTS "bse_volume_history_record_date_idx" ON "bse_volume_history"("record_date" DESC);
+    `);
+
+    // Create nse_volume_history table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "nse_volume_history"(
+          "symbol" VARCHAR(50) NOT NULL,
+          "series" VARCHAR(10) NOT NULL DEFAULT 'EQ',
+          "record_date" DATE NOT NULL,
+          "volume" BIGINT NULL,
+          "delivery_qty" BIGINT NULL,
+          "delivery_pct" DECIMAL(6, 2) NULL,
+          "turnover" DECIMAL(24, 4) NULL,
+          "no_of_trades" BIGINT NULL,
+          "created_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updated_at" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY("symbol", "series", "record_date")
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "nse_volume_history_idx" ON "nse_volume_history"("symbol", "record_date" DESC);
+      CREATE INDEX IF NOT EXISTS "nse_volume_history_record_date_idx" ON "nse_volume_history"("record_date" DESC);
+    `);
+
     console.log('Database schema initialized successfully.');
   } catch (error) {
     console.error('Error initializing database schema:', error);

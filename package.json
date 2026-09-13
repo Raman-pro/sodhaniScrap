@@ -18,6 +18,9 @@
     "sync:extremes": "tsx src/scripts/syncExtremes.ts",
     "start:research-reports": "tsx src/researchReports.ts",
     "skip_start:research-reports": "tsx src/researchReports.ts --skip_start",
+    "start:volume": "tsx src/volumeWorker.ts",
+    "skip_start:volume": "tsx src/volumeWorker.ts --skip_start",
+    "backfill:volumes": "tsx src/scripts/backfillVolumes.ts",
     "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -25,6 +28,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "adm-zip": "^0.6.1",
     "axios": "^1.18.1",
     "csv-parser": "^3.2.1",
     "dotenv": "^17.4.2",
@@ -33,6 +37,7 @@
     "yahoo-finance2": "^4.0.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^26.1.2",
     "@types/pg": "^8.20.0",
     "@types/pg-format": "^1.0.5",
