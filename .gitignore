@@ -131,4 +131,7 @@ __pycache__/
 *$py.class
 .venv/
 venv/
-.claude
+.claudeoutput
+output_consolidated
+output/
+output_consolidated/
