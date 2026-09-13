@@ -109,13 +109,13 @@ export async function downloadBseBhavcopy(targetDate: Date = new Date()): Promis
     const zip = new AdmZip(zipBuffer);
     const zipEntries = zip.getEntries();
 
-    const txtEntry = zipEntries.find(entry => entry.entryName.toLowerCase().endsWith('.txt'));
+    const txtEntry = zipEntries.find((entry: any) => entry.entryName.toLowerCase().endsWith('.txt'));
     if (!txtEntry) {
       throw new Error(`No .txt file found inside BSE zip archive for ${dateStr}`);
     }
 
     const rawText = txtEntry.getData().toString('utf8');
-    const lines = rawText.split(/\r?\n/).filter(line => line.trim().length > 0);
+    const lines = rawText.split(/\r?\n/).filter((line: string) => line.trim().length > 0);
 
     if (lines.length <= 1) {
       console.warn(`[BSE Bhavcopy] Empty or header-only file for ${dateStr}`);
@@ -127,7 +127,7 @@ export async function downloadBseBhavcopy(targetDate: Date = new Date()): Promis
     const parsedRows: any[][] = [];
 
     for (const line of dataLines) {
-      const cols = line.split('|').map(c => c.trim());
+      const cols = line.split('|').map((c: string) => c.trim());
       if (cols.length < 7) continue;
 
       const [dateRaw, scripCd, delivQtyRaw, delivValRaw, volRaw, turnoverRaw, delvPerRaw] = cols;
