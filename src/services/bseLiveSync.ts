@@ -7,6 +7,7 @@ import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import { updateLivePriceExtremes } from './priceExtremesService';
+import { isPayloadStale, parseBseDate, parseExchangeDateTimeToIso } from '../utils/exchangeState';
 const execFileAsync = promisify(execFile);
 
 function getNseStockCodes(dbRows: any[]): Set<string> {
@@ -109,24 +110,36 @@ export async function bseLiveSync() {
     return;
   }
 
+  // Find latest timestamp across the payload
+  let latestDtTm = '';
+  for (const item of allData) {
+    if (item.dt_tm && item.dt_tm > latestDtTm) {
+      latestDtTm = item.dt_tm;
+    }
+  }
+
+  if (latestDtTm && isPayloadStale('bse_live_sync', latestDtTm)) {
+    console.log(`[BSE Live Sync] Payload timestamp unchanged (${latestDtTm}). Skipping DB write.`);
+    return;
+  }
+
+  // Verify derived trade date is not an inadvertent weekend tick
+  if (latestDtTm) {
+    const tradeDateStr = parseBseDate(latestDtTm);
+    const tradeDay = new Date(`${tradeDateStr}T12:00:00Z`).getUTCDay();
+    if (tradeDay === 0 || tradeDay === 6) {
+      console.warn(`[BSE Live Sync] Derived trade date ${tradeDateStr} is a weekend. Skipping DB write.`);
+      return;
+    }
+  }
+
   const seen = new Set<string>();
   const values: any[] = [];
   
   for (const item of allData) {
-    let d: Date;
-    if (item.dt_tm) {
-      d = new Date(item.dt_tm.replace('T', ' ') + " GMT+0530");
-      // If the BSE API returned a stale tick from yesterday (e.g. 15:35) without a date,
-      // JS will incorrectly assume it's for today. If it appears to be in the future,
-      // it's actually from yesterday's close. We must safely ignore it.
-      if (d.getTime() > Date.now() + 60000) {
-        continue;
-      }
-    } else {
-      d = new Date();
-    }
-    
-    const recordDate = d.toISOString();
+    const recordDate = item.dt_tm 
+      ? parseExchangeDateTimeToIso(item.dt_tm) 
+      : (latestDtTm ? parseExchangeDateTimeToIso(latestDtTm) : new Date().toISOString());
     const key = `${item.scrip_cd}_${recordDate}`;
     
     if (!seen.has(key)) {

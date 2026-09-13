@@ -3,49 +3,32 @@ import { bootstrapMasterList } from './services/bootstrap';
 import { fetchHistoricalCatchup } from './services/yahooHistory';
 import { bseLiveSync } from './services/bseLiveSync';
 import { nseLiveSync } from './services/nseLiveSync';
+import { fetchMarketState } from './utils/exchangeState';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '300000', 10);
 
-function isMarketOpen() {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Kolkata",
-    hour: "numeric",
-    minute: "numeric",
-    weekday: "short",
-    hour12: false
-  }).formatToParts(new Date());
-
-  const hours = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
-  const minutes = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
-  const weekday = parts.find(p => p.type === 'weekday')?.value || '';
-
-  if (weekday === 'Sun' || weekday === 'Sat') return false;
-  
-  const timeNum = hours * 100 + minutes;
-  // 918 to 1610 (Starts at 09:18 IST to allow regular 09:15 open to settle and avoid pre-market quirks)
-  return timeNum >= 918 && timeNum <= 1610;
+async function pollLiveSync() {
+  const state = await fetchMarketState();
+  if (state.isOpen) {
+    await bseLiveSync();
+    await nseLiveSync();
+  } else {
+    console.log(`[Live Poller] ${state.message} (Trade Date: ${state.tradeDate}). Skipping live sync.`);
+  }
 }
 
 async function startLivePolling() {
   console.log(`Starting Phase 3 Live Polling Loop every ${POLL_INTERVAL_MS / 1000} seconds...`);
     
   // Run immediately first
-  if (isMarketOpen()) {
-    await bseLiveSync();
-    await nseLiveSync();
-  }
+  await pollLiveSync();
     
   // Then schedule
   setInterval(async () => {
-    if (isMarketOpen()) {
-      await bseLiveSync();
-      await nseLiveSync();
-    } else {
-      console.log('Market is closed (IST). Skipping live sync.');
-    }
+    await pollLiveSync();
   }, POLL_INTERVAL_MS);
 }
 

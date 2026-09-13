@@ -7,6 +7,7 @@ import format from 'pg-format';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import dotenv from 'dotenv';
+import { isPayloadStale, parseExchangeDateTimeToIso, parseNseDate } from '../utils/exchangeState';
 
 dotenv.config();
 
@@ -172,74 +173,62 @@ export async function nseIndicesLiveSync() {
                     // Extract Index Data (Priority 1)
                     const indexData = constituents.find((c: any) => c.priority === 1);
                     if (indexData) {
-                        const recordTime = indexData.lastUpdateTime 
-                            ? new Date(indexData.lastUpdateTime).toISOString().replace('T', ' ').split('.')[0] 
-                            : new Date().toISOString().replace('T', ' ').split('.')[0];
-                            
-                        const todayStr = recordTime.split(' ')[0];
-                        console.log(`[NSE Debug] Found indexData for ${idx.symbol}. recordTime: ${recordTime}. Updating daily summary...`);
+                        const payloadTimestamp = indexData.lastUpdateTime || res.data?.timestamp;
+                        if (isPayloadStale(`nse_idx_${idx.symbol}`, payloadTimestamp)) {
+                            console.log(`[NSE Debug] Index ${idx.symbol} timestamp unchanged (${payloadTimestamp}). Skipping index history write.`);
+                        } else {
+                            const recordIso = parseExchangeDateTimeToIso(payloadTimestamp);
+                            const recordTime = recordIso.replace('T', ' ').split('.')[0];
+                            const todayStr = parseNseDate(payloadTimestamp);
+                            console.log(`[NSE Debug] Found indexData for ${idx.symbol}. recordTime: ${recordTime}. Updating daily summary...`);
 
-                        // Insert daily summary
-                        const dailyQuery = format(`
-                            INSERT INTO nse_index_history (symbol, record_time, value, prev_close, change_val, change_pct, advances, declines, unchanged)
-                            VALUES %L
-                            ON CONFLICT (symbol, record_time) DO UPDATE SET
-                                value = EXCLUDED.value,
-                                prev_close = EXCLUDED.prev_close,
-                                change_val = EXCLUDED.change_val,
-                                change_pct = EXCLUDED.change_pct,
-                                advances = EXCLUDED.advances,
-                                declines = EXCLUDED.declines,
-                                unchanged = EXCLUDED.unchanged,
-                                updated_at = CURRENT_TIMESTAMP
-                        `, [[idx.symbol, `${todayStr} 00:00:00`, indexData.lastPrice, indexData.previousClose, indexData.change, indexData.pChange, aduCount.advances, aduCount.declines, aduCount.unchange]]);
-                        await client.query(dailyQuery);
+                            // Insert daily summary
+                            const dailyQuery = format(`
+                                INSERT INTO nse_index_history (symbol, record_time, value, prev_close, change_val, change_pct, advances, declines, unchanged)
+                                VALUES %L
+                                ON CONFLICT (symbol, record_time) DO UPDATE SET
+                                    value = EXCLUDED.value,
+                                    prev_close = EXCLUDED.prev_close,
+                                    change_val = EXCLUDED.change_val,
+                                    change_pct = EXCLUDED.change_pct,
+                                    advances = EXCLUDED.advances,
+                                    declines = EXCLUDED.declines,
+                                    unchanged = EXCLUDED.unchanged,
+                                    updated_at = CURRENT_TIMESTAMP
+                            `, [[idx.symbol, `${todayStr} 00:00:00`, indexData.lastPrice, indexData.previousClose, indexData.change, indexData.pChange, aduCount.advances, aduCount.declines, aduCount.unchange]]);
+                            await client.query(dailyQuery);
 
-                        // Insert intraday tick
-                        const intradayQuery = format(`
-                            INSERT INTO nse_index_history (symbol, record_time, value, prev_close, change_val, change_pct, advances, declines, unchanged)
-                            VALUES %L
-                            ON CONFLICT (symbol, record_time) DO UPDATE SET
-                                value = EXCLUDED.value,
-                                prev_close = EXCLUDED.prev_close,
-                                change_val = EXCLUDED.change_val,
-                                change_pct = EXCLUDED.change_pct,
-                                advances = EXCLUDED.advances,
-                                declines = EXCLUDED.declines,
-                                unchanged = EXCLUDED.unchanged,
-                                updated_at = CURRENT_TIMESTAMP
-                        `, [[idx.symbol, recordTime, indexData.lastPrice, indexData.previousClose, indexData.change, indexData.pChange, aduCount.advances, aduCount.declines, aduCount.unchange]]);
-                        await client.query(intradayQuery);
-                        console.log(`[NSE Debug] Successfully inserted index history for ${idx.symbol}`);
+                            // Insert intraday tick
+                            const intradayQuery = format(`
+                                INSERT INTO nse_index_history (symbol, record_time, value, prev_close, change_val, change_pct, advances, declines, unchanged)
+                                VALUES %L
+                                ON CONFLICT (symbol, record_time) DO UPDATE SET
+                                    value = EXCLUDED.value,
+                                    prev_close = EXCLUDED.prev_close,
+                                    change_val = EXCLUDED.change_val,
+                                    change_pct = EXCLUDED.change_pct,
+                                    advances = EXCLUDED.advances,
+                                    declines = EXCLUDED.declines,
+                                    unchanged = EXCLUDED.unchanged,
+                                    updated_at = CURRENT_TIMESTAMP
+                            `, [[idx.symbol, recordTime, indexData.lastPrice, indexData.previousClose, indexData.change, indexData.pChange, aduCount.advances, aduCount.declines, aduCount.unchange]]);
+                            await client.query(intradayQuery);
+                            console.log(`[NSE Debug] Successfully inserted index history for ${idx.symbol}`);
+                        }
                     } else {
                         console.log(`[NSE Debug] indexData NOT FOUND for ${idx.symbol}. Constituents:`, constituents.map((c: any) => c.symbol).slice(0, 5));
                     }
 
-                    // Extract Constituents
+                    // Extract Constituents & Upsert Mapping
+                    // Individual constituent stock prices are managed by the core nseLiveSync to avoid dual-writer contention
                     const constituentStocks = constituents.filter((c: any) => c.priority === 0);
-                    
-                    const priceValues = [];
                     const relValues = [];
-                    const recordDate = new Date().toISOString().split('T')[0];
 
                     for (const stock of constituentStocks) {
                         const rawTckr = stock.symbol;
                         const dbFinInstrmId = validCodesMap.get(rawTckr);
-                        
                         if (dbFinInstrmId) {
-                            // Upsert mapping
                             relValues.push([idx.symbol, dbFinInstrmId]);
-
-                            // Upsert live price using exact true API data
-                            priceValues.push([
-                                dbFinInstrmId,
-                                recordDate,
-                                stock.open,
-                                stock.dayHigh,
-                                stock.dayLow,
-                                stock.lastPrice, // close_price
-                                Math.floor(stock.totalTradedVolume)
-                            ]);
                         }
                     }
 
@@ -252,22 +241,6 @@ export async function nseIndicesLiveSync() {
                             ON CONFLICT DO NOTHING
                         `, relValues);
                         await client.query(relQuery);
-                    }
-
-                    if (priceValues.length > 0) {
-                        const priceQuery = format(`
-                            INSERT INTO historical_prices 
-                            ("FinInstrmId", record_date, open_price, high_price, low_price, close_price, volume)
-                            VALUES %L
-                            ON CONFLICT ("FinInstrmId", record_date) DO UPDATE SET 
-                                open_price = EXCLUDED.open_price,
-                                high_price = EXCLUDED.high_price,
-                                low_price = EXCLUDED.low_price,
-                                close_price = EXCLUDED.close_price,
-                                volume = EXCLUDED.volume
-                        `, priceValues);
-                        await client.query(priceQuery);
-                        console.log(`[NSE Debug] Successfully inserted constituent prices for ${idx.symbol}`);
                     }
                 }
             }

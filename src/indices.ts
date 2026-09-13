@@ -2,6 +2,7 @@ import { initDB } from './db/init';
 import { seedIndices, indicesHistoryBackfill, indicesSync } from './services/indicesSync';
 import { seedNseIndices, nseIndicesHistoryBackfill, nseIndicesLiveSync } from './services/nseIndicesSync';
 import { bseIndexConstituentsSync } from './services/bseIndexConstituentsSync';
+import { fetchMarketState } from './utils/exchangeState';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -20,19 +21,26 @@ async function maybeSyncBseConstituents() {
   await bseIndexConstituentsSync();
 }
 
+async function pollIndices() {
+  const state = await fetchMarketState();
+  if (state.isOpen) {
+    await indicesSync();
+    await nseIndicesLiveSync();
+  } else {
+    console.log(`[Indices Poller] ${state.message} (Trade Date: ${state.tradeDate}). Skipping live indices sync.`);
+  }
+  await maybeSyncBseConstituents();
+}
+
 async function startIndicesPolling() {
   console.log(`Starting Indices Live Polling Loop every ${INDICES_POLL_INTERVAL_MS / 1000} seconds...`);
 
   // Run immediately first
-  await indicesSync();
-  await nseIndicesLiveSync();
-  await maybeSyncBseConstituents();
+  await pollIndices();
 
   // Then schedule
   setInterval(async () => {
-    await indicesSync();
-    await nseIndicesLiveSync();
-    await maybeSyncBseConstituents();
+    await pollIndices();
   }, INDICES_POLL_INTERVAL_MS);
 }
 

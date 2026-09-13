@@ -4,6 +4,7 @@ import format from 'pg-format';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { updateLivePriceExtremes } from './priceExtremesService';
+import { isPayloadStale, parseExchangeDateTimeToIso, parseNseDate } from '../utils/exchangeState';
 const execFileAsync = promisify(execFile);
 
 // Use curl to bypass NSE basic anti-bot which blocks axios/fetch
@@ -39,6 +40,20 @@ export async function nseLiveSync() {
     return;
   }
 
+  const payloadTimestamp = res?.timestamp;
+  if (isPayloadStale('nse_live_sync', payloadTimestamp)) {
+    console.log(`[NSE Live Sync] Payload timestamp unchanged (${payloadTimestamp}). Skipping DB write.`);
+    return;
+  }
+
+  // Derive trade date and verify it is not an inadvertent weekend tick
+  const tradeDateStr = parseNseDate(payloadTimestamp);
+  const tradeDay = new Date(`${tradeDateStr}T12:00:00Z`).getUTCDay();
+  if (tradeDay === 0 || tradeDay === 6) {
+    console.warn(`[NSE Live Sync] Derived trade date ${tradeDateStr} is a weekend. Skipping DB write.`);
+    return;
+  }
+
   const client = await pool.connect();
 
   try {
@@ -63,7 +78,9 @@ export async function nseLiveSync() {
 
     const seen = new Set<string>();
     const values: any[] = [];
-    const recordDate = new Date().toISOString(); // Using full timestamp for intraday charting
+    const recordDate = payloadTimestamp 
+      ? parseExchangeDateTimeToIso(payloadTimestamp) 
+      : new Date().toISOString(); // Using verified exchange timestamp for intraday charting
 
     for (const item of allData) {
       // NSE data doesn't provide exact open/high/low in this endpoint.
