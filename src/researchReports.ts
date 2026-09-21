@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const RESEARCH_REPORTS_POLL_INTERVAL_MS = parseInt(process.env.RESEARCH_REPORTS_POLL_INTERVAL_MS || '21600000', 10);
+const RESEARCH_REPORTS_POLL_INTERVAL_MS = parseInt(process.env.RESEARCH_REPORTS_POLL_INTERVAL_MS || '1800000', 10);
 
 async function startResearchReportsPolling() {
   console.log(`Starting Research Reports Polling Loop every ${RESEARCH_REPORTS_POLL_INTERVAL_MS / 1000} seconds...`);
