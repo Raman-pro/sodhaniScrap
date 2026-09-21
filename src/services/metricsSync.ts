@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { pool } from '../db/pool';
 import YahooFinance from 'yahoo-finance2';
+import { pickVariant, isPositive, isNonZero } from './metricsVariant';
 const yahooFinance = new (YahooFinance as any)({ suppressNotices: ['yahooSurvey'] });
 
 // Helper to safely parse numbers from strings like "₹ 1,284" or "7.78 %"
@@ -154,10 +155,18 @@ export async function metricsSync() {
           }
         }
 
-        // Metrics Fallback (Standalone > Consolidated)
+        // Market cap and price are the same number on both screener.in tabs
+        // (shares x price), so the order here is only about which file is
+        // populated - left standalone-first deliberately.
         let mktCapJson = parseCleanNumber(stdJson?.key_metrics?.["Market Cap"]) || parseCleanNumber(consJson?.key_metrics?.["Market Cap"]) || 0;
         let currentPriceJson = parseCleanNumber(stdJson?.key_metrics?.["Current Price"]) || parseCleanNumber(consJson?.key_metrics?.["Current Price"]) || 0;
-        let roce = parseCleanNumber(stdJson?.key_metrics?.["ROCE"]) || parseCleanNumber(consJson?.key_metrics?.["ROCE"]) || 0;
+        // Consolidated-first (see metricsVariant.ts): standalone ROCE is a
+        // different company's return - 7.78% vs 10.3% for RELIANCE.
+        let roce = pickVariant(
+          parseCleanNumber(consJson?.key_metrics?.["ROCE"]),
+          parseCleanNumber(stdJson?.key_metrics?.["ROCE"]),
+          isNonZero
+        ) || 0;
 
         // Calculate Shares Outstanding and Live Mkt Cap
         let sharesOutstanding = 0;
@@ -166,7 +175,8 @@ export async function metricsSync() {
         }
         let liveMktCap = cmp * sharesOutstanding;
 
-        // Extract EPS and Dividend (Standalone > Consolidated)
+        // Extract EPS and Dividend from one variant's P&L. The last column is
+        // screener.in's TTM column when it publishes one, else the latest FY.
         const extractEps = (sourceJson: any) => {
           if (!sourceJson || !Array.isArray(sourceJson.profit_loss)) return { eps: 0, div: 0 };
           const epsRow = sourceJson.profit_loss.find((r: any) => r[""] === "EPS in Rs");
@@ -189,8 +199,11 @@ export async function metricsSync() {
         const stdEps = extractEps(stdJson);
         const consEps = extractEps(consJson);
         
-        let annualEps = stdEps.eps > 0 ? stdEps.eps : consEps.eps;
-        let dividendPayout = stdEps.eps > 0 ? stdEps.div : (consEps.eps > 0 ? consEps.div : 0);
+        // Picked as a unit so the dividend payout belongs to the same set of
+        // earnings the P/E is computed from.
+        const eps = pickVariant(consEps, stdEps, (e) => isPositive(e.eps));
+        let annualEps = eps.eps;
+        let dividendPayout = isPositive(eps.eps) ? eps.div : 0;
 
         let pe = 0;
         if (annualEps > 0) {
@@ -237,10 +250,14 @@ export async function metricsSync() {
         const stdQtr = extractQuarterly(stdJson);
         const consQtr = extractQuarterly(consJson);
 
-        let npQtr = stdQtr.np !== 0 ? stdQtr.np : consQtr.np;
-        let profitVar = stdQtr.np !== 0 ? stdQtr.pv : consQtr.pv;
-        let salesQtr = stdQtr.sq !== 0 ? stdQtr.sq : consQtr.sq;
-        let salesVar = stdQtr.sq !== 0 ? stdQtr.sv : consQtr.sv;
+        // Profit and sales are selected independently (a row can carry one
+        // without the other) but each keeps its own YoY figure alongside it.
+        const profitQtr = pickVariant(consQtr, stdQtr, (q) => isNonZero(q.np));
+        const turnoverQtr = pickVariant(consQtr, stdQtr, (q) => isNonZero(q.sq));
+        let npQtr = profitQtr.np;
+        let profitVar = profitQtr.pv;
+        let salesQtr = turnoverQtr.sq;
+        let salesVar = turnoverQtr.sv;
 
         if (liveMktCap === 0 || pe === 0 || cmp === 0) {
           const yfTicker = nseSymbol !== symbol ? `${nseSymbol}.NS` : `${symbol}.BO`;
