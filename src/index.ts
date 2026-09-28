@@ -10,13 +10,34 @@ dotenv.config();
 
 const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || '300000', 10);
 
+let lastEodCatchupDate = '';
+
 async function pollLiveSync() {
   const state = await fetchMarketState();
+  
+  // Calculate IST Time
+  const now = new Date();
+  const utcHour = now.getUTCHours();
+  const utcMin = now.getUTCMinutes();
+  const totalISTMinutes = (utcHour * 60 + utcMin) + (5 * 60 + 30);
+  const istHour = Math.floor(totalISTMinutes / 60) % 24;
+  const istMin = totalISTMinutes % 60;
+  const todayStr = now.toISOString().split('T')[0];
+
   if (state.isOpen) {
     await bseLiveSync();
     await nseLiveSync();
   } else {
     console.log(`[Live Poller] ${state.message} (Trade Date: ${state.tradeDate}). Skipping live sync.`);
+    
+    // EOD Catch-up trigger at 16:30 IST or later
+    if (istHour >= 16 && (istHour > 16 || istMin >= 30)) {
+      if (lastEodCatchupDate !== todayStr) {
+        console.log(`[EOD Catch-up] Triggering daily historical catchup for ${todayStr}...`);
+        await fetchHistoricalCatchup();
+        lastEodCatchupDate = todayStr;
+      }
+    }
   }
 }
 

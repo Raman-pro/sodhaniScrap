@@ -55,14 +55,31 @@ const BSE_HEADERS = {
 };
 
 
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+];
+
+function getRandomUA() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
 async function fetchBSEData(url: string) {
   try {
     const { stdout } = await execFileAsync('curl', [
       '-s',
       '-m', '15',
-      '-H', 'accept: application/json',
-      '-H', 'user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      '-H', 'accept: application/json, text/plain, */*',
+      '-H', 'accept-language: en-US,en;q=0.9',
+      '-H', `user-agent: ${getRandomUA()}`,
       '-H', 'Referer: https://www.bseindia.com/',
+      '-H', 'sec-ch-ua-mobile: ?0',
+      '-H', 'sec-fetch-dest: empty',
+      '-H', 'sec-fetch-mode: cors',
+      '-H', 'sec-fetch-site: same-site',
       url
     ], { maxBuffer: 10 * 1024 * 1024 });
     return JSON.parse(stdout);
