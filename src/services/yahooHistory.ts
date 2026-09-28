@@ -79,10 +79,15 @@ export async function fetchHistoricalCatchup() {
       const period1 = last_record 
         ? new Date(last_record).toISOString().split('T')[0] 
         : (process.env.YAHOO_DEFAULT_START_DATE || '1990-01-01'); 
-      const period2 = new Date().toISOString().split('T')[0];
       
-      if (period1 === period2) {
-         continue; // Data is up to date, skip fetching
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const period2 = tomorrow.toISOString().split('T')[0];
+      
+      // If last_record is today, we still want to fetch today to get the final EOD close, 
+      // but if period1 is somehow tomorrow, we skip.
+      if (period1 > period2) {
+         continue; // Data is in the future, skip fetching
       }
       
       const attemptFetch = async (symbol: string) => {
