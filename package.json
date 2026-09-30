@@ -34,6 +34,7 @@
     "dotenv": "^17.4.2",
     "pg": "^8.22.0",
     "pg-format": "^1.0.4",
+    "playwright": "1.63.0",
     "yahoo-finance2": "^4.0.0"
   },
   "devDependencies": {
