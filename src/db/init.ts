@@ -105,6 +105,29 @@ export async function initDB() {
       CREATE INDEX IF NOT EXISTS "bse_announcements_categoryname_idx" ON "bse_announcements"("categoryname");
     `);
 
+    // Create nse_announcements table. One row per NSE corporate announcement,
+    // keyed by NSE's seq_id. Every listed company is stored (the feed is one
+    // market-wide call); filtering to a stock happens at read time by symbol.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "nse_announcements"(
+          "seq_id" VARCHAR(64) PRIMARY KEY,
+          "symbol" VARCHAR(64) NOT NULL,
+          "isin" VARCHAR(32) NULL,
+          "company_name" TEXT NULL,
+          "an_dt" TIMESTAMPTZ NULL,
+          "category" TEXT NULL,
+          "description" TEXT NULL,
+          "attachment_url" TEXT NULL,
+          "attachment_size" VARCHAR(32) NULL,
+          "has_xbrl" BOOLEAN NULL
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "nse_announcements_symbol_dt_idx" ON "nse_announcements"("symbol", "an_dt" DESC);
+      CREATE INDEX IF NOT EXISTS "nse_announcements_an_dt_idx" ON "nse_announcements"("an_dt" DESC);
+    `);
+
     // Create bse_spurt_volume table
     await client.query(`
       CREATE TABLE IF NOT EXISTS "bse_spurt_volume"(
